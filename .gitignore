@@ -10,7 +10,12 @@
 .claude/dashboard/folders.json
 .claude/dashboard/*.bak*
 .claude/dashboard/*.pre-improve
-.claude/dashboard/node_modules/
+node_modules/
 __pycache__/
 .DS_Store
 .obsidian/workspace*.json
+.claude/jarvis.json
+.claude/agent/google-token.json
+.claude/dashboard/lib/*.bak*
+dist/
+selftest-report.txt

@@ -43,7 +43,7 @@ async function chat(cfg, { messages, tools, onText, signal, maxTokens }) {
   if (cfg.provider === 'openrouter') { headers['HTTP-Referer'] = 'https://github.com/'; headers['X-Title'] = 'V.A.U.L.T. Jarvis'; }
 
   let res, lastErr = '';
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 6; attempt++) {
     try {
       res = await fetch(cfg.baseUrl + '/chat/completions', { method: 'POST', headers, body: JSON.stringify(body), signal });
     } catch (e) {
@@ -54,7 +54,8 @@ async function chat(cfg, { messages, tools, onText, signal, maxTokens }) {
     lastErr = res.status + ' ' + (await res.text().catch(() => '')).slice(0, 600);
     if (!RETRY_STATUS.has(res.status)) break;
     const ra = Number(res.headers.get('retry-after'));
-    await sleep(ra > 0 ? Math.min(ra, 30) * 1000 : 1500 * 2 ** attempt);
+    // Free tiers are rate-limited per minute: back off up to ~30 s so a busy agent loop recovers on its own.
+    await sleep(ra > 0 ? Math.min(ra, 60) * 1000 : Math.min(30000, (res.status === 429 ? 4000 : 1500) * 2 ** attempt));
     res = null;
   }
   if (!res || !res.ok) throw new Error('LLM request failed (' + cfg.provider + ' / ' + cfg.model + '): ' + lastErr);

@@ -1,6 +1,6 @@
 ---
 name: past-paper
-description: Build and mark a timed IB-style past paper from Boss's own notes. Use when he says "past paper", "give me a paper", "exam practice", "mock", "考卷", "模擬考", or clicks PAST PAPER in the dashboard. Unlike quiz-me (live, one question at a time, spoken), this produces a written paper he sits under timed conditions, then marks it.
+description: Build and mark a timed exam-style past paper (IB by default) from Boss's own notes. Use when he says "past paper", "give me a paper", "exam practice", "mock", "考卷", "模擬考", or clicks PAST PAPER in the dashboard. Unlike quiz-me (live, one question at a time, spoken), this produces a written paper he sits under timed conditions, then marks it.
 ---
 
 # PAST PAPER (timed written drill)
@@ -23,6 +23,8 @@ Grep/Glob the WHOLE vault for the topic before writing a single question — not
 Check `Exams.md` — if the topic matches an exam under 14 days away, weight the paper toward that syllabus.
 
 ### 2. Choose the paper shape
+
+> **Curriculum:** the tables below are the built-in **IB** rubrics. If the owner's curriculum (see `.claude/jarvis.json` / the system prompt) is not IB — AP, A-Level, GCSE, national exams — use that curriculum's official criteria instead, looking them up if needed. Never mark non-IB work against IB criteria.
 
 | Subject | Shape |
 |---|---|

@@ -1,93 +1,111 @@
 # V.A.U.L.T. — a J.A.R.V.I.S. for your Obsidian vault
 
-A voice-first personal AI assistant that lives in your Obsidian vault. Talk to it, and it searches, reads and edits your notes, runs study drills, writes daily briefings and remembers you across sessions. It all runs locally from one Node.js server with a sci-fi HUD in the browser.
+[![CI](https://github.com/jarvisink2-rgb/vault-jarvis/actions/workflows/ci.yml/badge.svg)](https://github.com/jarvisink2-rgb/vault-jarvis/actions/workflows/ci.yml)
 
-**Works with free models.** It isn't tied to one AI company. The built-in agent works with any OpenAI-compatible API:
+A voice-first personal AI assistant that lives in your Obsidian vault. Talk to it, and it searches, reads and edits your notes, quizzes you, marks your essays against real rubrics, writes daily briefings, reads your mail and calendar, and remembers you across sessions. All of it runs locally with a sci-fi HUD.
 
-| Provider | Cost | Setup |
+**Free to run.** It isn't tied to one AI company:
+
+| Provider | Cost | What you need |
 |---|---|---|
-| **Google Gemini** (default) | Free tier, no card needed | `GEMINI_API_KEY` from [AI Studio](https://aistudio.google.com/apikey) |
-| Groq | Free tier | `JARVIS_PROVIDER=groq`, `GROQ_API_KEY`, `JARVIS_MODEL` |
-| OpenRouter | Some models are free | `JARVIS_PROVIDER=openrouter`, `OPENROUTER_API_KEY`, `JARVIS_MODEL` |
-| Ollama | Free, 100% offline | `JARVIS_PROVIDER=ollama`, `JARVIS_MODEL` |
-| OpenAI / Anthropic | Paid | `JARVIS_PROVIDER=openai` or `anthropic` + key + `JARVIS_MODEL` |
-| Claude Code CLI | Paid | `JARVIS_AGENT=claude` (the original backend, adds Gmail/Calendar) |
+| **Google Gemini** (default) | Free tier, no card | A key from [AI Studio](https://aistudio.google.com/apikey) |
+| Groq | Free tier | Key + model id |
+| OpenRouter | Some models free | Key + model id |
+| Ollama | Free, 100% offline | [Ollama](https://ollama.com) + a model with tool calling |
+| OpenAI / Anthropic | Paid | Key + model id |
+| Any OpenAI-compatible URL | – | Base URL + model id |
 
 ---
 
-## Setup (5 minutes)
+## Install — pick one
 
-**You need:** [Node.js 18+](https://nodejs.org), Google Chrome (for the microphone), and optionally Python 3 for offline speech recognition.
+### A. Obsidian plugin (no terminal)
+
+1. Install the **VAULT Jarvis** plugin:
+   - **While it's awaiting review for the Community Plugins directory:** install [BRAT](https://obsidian.md/plugins?id=obsidian42-brat), run *BRAT: Add a beta plugin*, and paste `jarvisink2-rgb/vault-jarvis`.
+   - Or download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/jarvisink2-rgb/vault-jarvis/releases) into `<vault>/.obsidian/plugins/vault-jarvis/`.
+2. Enable it, open **Settings → VAULT Jarvis**, and paste your free Gemini key.
+3. Click the 🤖 ribbon icon. On first run the plugin installs Jarvis into your vault's `.claude/` folder and starts the local server. **You don't need Node.js**, because it can use Obsidian's built-in runtime.
+
+**Voice:** typing works everywhere, but the microphone is most reliable in Chrome. Click **Open in browser (voice)** to use the same HUD there.
+
+### B. Terminal (macOS, Linux, Windows)
+
+Requires [Node.js 18+](https://nodejs.org). There are no npm dependencies.
 
 ```bash
-git clone https://github.com/jarvisink2-rgb/vault-jarvis.git
-cd vault-jarvis
-bash setup.sh                 # creates .env, memory files, installs the voice package
+git clone https://github.com/jarvisink2-rgb/vault-jarvis.git && cd vault-jarvis
+cp .env.example .env          # paste GEMINI_API_KEY=...
+npm run selftest              # ~20 s live check against your model
+npm start                     # → http://localhost:3333 in Chrome
 ```
 
-1. Open `.env` and paste a free Gemini key after `GEMINI_API_KEY=`.
-2. Start it: double-click **`Jarvis.command`** (macOS), or run `node .claude/dashboard/server.js`.
-3. Open **http://localhost:3333** in Chrome and click the glowing core to talk.
-
-**Using your existing Obsidian vault:** copy `.claude/`, `CLAUDE.md`, `.env`, `TO DO.md`, `Exams.md` and the two `.command` files into the root of your vault. Then edit the vault map in `CLAUDE.md` to match your folders. Or keep this repo where it is and set `JARVIS_VAULT=~/path/to/your/vault` in `.env`.
-
-Tell Jarvis about yourself in `.claude/memory/profile.md`. That file is loaded into every conversation.
+On macOS you can double-click `Jarvis.command` instead of `npm start`. On Windows, double-click `Jarvis.bat`; on Linux, run `./jarvis.sh`. To use an existing vault, copy `.claude/`, `CLAUDE.md`, `.env`, `TO DO.md` and `Exams.md` into it, or set `JARVIS_VAULT=~/path/to/vault` in `.env`.
 
 ---
+
+## Make it yours
+
+- **What it calls you:** set your name, pronouns and curriculum in the plugin settings, in `.env` (`JARVIS_OWNER_NAME`, `JARVIS_OWNER_PRONOUN`, `JARVIS_CURRICULUM`) or in `.claude/jarvis.json`. The whole persona, UI, greetings and nudges adapt. The default is "Boss", in the style of Stark's JARVIS.
+- **Who you are:** `.claude/memory/profile.md` is loaded into every conversation.
+- **Your vault layout:** edit the vault map in `CLAUDE.md`.
+- **Curriculum:** the study protocols ship with IB rubrics. Set another curriculum (AP, A-Level, GCSE, …) and Jarvis uses that curriculum's official criteria instead.
+- **Skills:** these are plain Markdown in `.claude/skills/*/SKILL.md`. Edit them or add your own; the agent sees them automatically.
 
 ## What it does
 
-- **Voice in, voice out.** Mic modes cycle OFF → WAKE "JARVIS" → CONVO. You can talk over him to interrupt. Speech recognition uses the browser, or local Whisper if you install it. Voices are free Microsoft Edge neural voices, with optional ElevenLabs.
-- **He reads before he answers.** A BM25 index over every note (it handles English and Chinese) is searched on every turn, so answers cite your actual notes.
+- **Voice in, voice out.** Mic modes cycle OFF → WAKE "JARVIS" → CONVO, and you can talk over him to interrupt. Speech recognition uses the browser or local Whisper. Voices are free Microsoft Edge neural voices (bundled), with optional ElevenLabs.
+- **He reads before he answers.** A BM25 index over every note (it handles English and Chinese) is searched on every turn, and answers cite your notes.
 - **Vault nervous system.** He sees your edits within about 20 seconds and knows every note's path.
-- **Persistent memory.** `profile.md` (pinned) and `memory.md` (auto-distilled from conversations) are injected into each session.
-- **One-click skills (protocols):** Study Mode (live spoken quiz), Past Paper, Mark My Work (IB rubrics), Morning Report, Night Review (spaced repetition), Deep Research, Process Inbox, Link Notes, Rebuild Index, Weekly Plan, Gap Audit, Revision Sheet, Organize Files.
-- **HUD:** ⌘K vault search, a note viewer with clickable wikilinks, a force-directed link graph, an exam countdown, a to-do list, themes, and a full English / 繁體中文 UI.
+- **Memory.** Your pinned profile plus a `memory.md` that is distilled automatically from your conversations.
+- **One-click protocols:** Study Mode (spoken quiz), Past Paper, Mark My Work, Morning Report, Night Review (spaced repetition), Deep Research, Process Inbox, Link Notes, Rebuild Index, Weekly Plan, Gap Audit, Revision Sheet, Organize Files, Inbox Brief, Draft Reply, Calendar Brief.
+- **HUD:** ⌘K search, a note viewer with clickable wikilinks, a link graph, an exam countdown, a to-do list, themes, and a full English / 繁體中文 UI.
 - **Phone:** same Wi-Fi via ⚙ → PHONE, or from anywhere with voice via [Tailscale](https://tailscale.com).
-- **Automations (cron):** `bash .claude/automations/install-crons.sh` schedules the morning report, nightly memory consolidation, the weekly plan, the gap audit and nightly self-improvement.
+- **Automations:** `bash .claude/automations/install-crons.sh` (macOS/Linux) schedules the morning report, memory consolidation, the weekly plan, the gap audit and nightly self-improvement.
 
-Skills are plain Markdown in `.claude/skills/*/SKILL.md`, so you can edit them or add your own. The agent sees the list automatically.
+## Gmail & Calendar (optional, any model)
 
----
+Jarvis talks to Google's APIs directly, so this works with Gemini, Ollama or any other provider. It can **read** mail, **create drafts** and read or create calendar events. **It has no send tool:** you always press Send yourself. Email content is treated as untrusted data, and attempts to instruct Jarvis through an email are quoted back to you.
 
-## How the model-agnostic agent works
+1. In [Google Cloud Console](https://console.cloud.google.com), create a project and enable the **Gmail API** and the **Google Calendar API**.
+2. Set up **Google Auth Platform → Branding** (any app name). Under Audience, choose **External** and add yourself as a test user.
+3. Go to **Clients → Create client → Desktop app**, then copy the ID and secret into the plugin settings or `.env` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`).
+4. Click **Sign in with Google** in the plugin, or run `npm run google:auth`.
 
-The dashboard was first built on the Claude Code CLI (`claude -p`). `.claude/agent/vault-agent.js` is a zero-dependency drop-in replacement. It accepts the same flags and emits the same `stream-json` events, but runs its own tool-use loop against whichever model you configure.
+While the app is in **Testing** status, Google expires the sign-in after 7 days. To avoid re-signing weekly, set the audience to **In production**. You'll see an "unverified app" warning; it's your own app, so continue.
+
+## Check it works
+
+```bash
+npm run selftest    # live: plain reply · tool calling + note edit · dashboard streaming protocol · Google (if connected)
+npm test            # offline test suite (mock model), runs in CI on macOS, Windows and Linux
+```
+
+If the self-test fails, it tells you why: rate limit, bad key, unknown model, or a model without tool support.
+
+## How it works
 
 ```
-Browser HUD ─▶ server.js ─▶ vault-agent.js ─▶ Gemini / Groq / Ollama / … (OpenAI-compatible API)
-                                  │
-                                  └─ tools: read_file · write_file · edit_file · move_file · list_files
-                                            grep · web_search · web_fetch · delegate_task (sub-agents)
+Obsidian plugin ─┐
+Browser / phone ─┴─▶ .claude/dashboard/server.js ──▶ .claude/agent/vault-agent.js ──▶ Gemini · Groq · Ollama · … (OpenAI-compatible)
+                        lib/  (persona, memory,          tools: read · write · edit · move · list · grep · web_search · web_fetch
+                               search, voice, …)                delegate_task · gmail_* · calendar_*   (no delete, no shell)
+                        public/ (HUD: html/css/js)
 ```
 
-- **Sandboxed:** the agent can only reach the vault plus the folders you grant in ⚙ → GRANTED FOLDERS. Granted folders are read-only unless you tick write access. It has **no delete tool and no shell**.
-- **Web search:** keyless DuckDuckGo by default. Set `TAVILY_API_KEY` or `BRAVE_API_KEY` (both have free tiers) for more reliable results.
-- **Sessions:** conversations resume through `.claude/agent-sessions/`. This folder is git-ignored.
-- **CLI use:** `.claude/agent/jarvis-run -p "Run the morning-report skill now."`
+- **Sandboxed:** the agent can reach only the vault and the folders you grant in ⚙ → GRANTED FOLDERS. Granted folders are read-only unless you tick write access.
+- **Claude Code still works:** set `JARVIS_AGENT=claude` to use the Claude Code CLI as the backend.
+- See [CONTRIBUTING.md](CONTRIBUTING.md) for the code map.
 
-**Limitation:** Gmail and Google Calendar need MCP connectors, and only the Claude Code backend has those (`JARVIS_AGENT=claude`). With other models, the INBOX BRIEF, DRAFT REPLY and CALENDAR BRIEF chips tell you they aren't available.
+## Privacy & disclosures
 
----
-
-## Privacy
-
-Everything personal stays on your machine and is **git-ignored**: `.env`, `memory.md`, `profile.md`, conversation logs, sessions, persona notes and folder grants. Your notes are sent only to the model provider you choose. Pick Ollama if you want nothing to leave your computer. Note that free-tier API providers may use your prompts to improve their models, so check their terms.
-
-## Project layout
-
-```
-.claude/
-  agent/        vault-agent.js (agent loop) · llm.js (streaming client) · tools.js · providers.js · jarvis-run
-  dashboard/    server.js (HUD + API, port 3333) · whisper_server.py · video_ingest.py
-  skills/       one folder per protocol (SKILL.md)
-  agents/       sub-agent roles · commands/  slash-command prompts
-  automations/  cron scripts
-  memory/       profile.md + memory.md (created by setup.sh, git-ignored)
-CLAUDE.md       vault rules the agent reads first
-TO DO.md · Exams.md · Home.md · raw/ · wiki/ · output/
-```
+- **Network:** your prompts and the note excerpts they need go **only to the model provider you choose**. With Ollama, nothing leaves your computer. Web search uses DuckDuckGo, or Tavily/Brave if you add a key. Speech uses Microsoft Edge TTS (or ElevenLabs if configured). Gmail and Calendar use Google's APIs with your own OAuth client.
+- **Local server:** Jarvis runs an HTTP server on port 3333. Requests from other devices need the random access key.
+- **Files:** the plugin writes Jarvis's code into `.claude/` in your vault. It never overwrites your notes, skills or memory, and backs up customised code as `.bak-*`.
+- **Kept local and git-ignored:** keys (`.env`, plugin `data.json`), `memory.md`, `profile.md`, conversation logs, the Google token and sessions.
+- Free-tier API providers may use prompts to improve their models, so check their terms.
+- No telemetry, no accounts, no payments.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). Bundled: [msedge-tts](https://www.npmjs.com/package/msedge-tts) (MIT) and its dependencies (MIT/ISC/BSD-3-Clause); their licenses are preserved in `.claude/dashboard/lib/vendor/msedge-tts.js`.

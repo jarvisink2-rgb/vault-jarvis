@@ -1,0 +1,6 @@
+.vault-jarvis-view { padding: 0 !important; display: flex; flex-direction: column; height: 100%; }
+.vault-jarvis-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--background-modifier-border); font-size: var(--font-ui-small); }
+.vault-jarvis-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.vault-jarvis-status { color: var(--text-muted); }
+.vault-jarvis-frame { flex: 1; width: 100%; border: 0; background: #0B0D10; }
+.vault-jarvis-error { padding: 16px; color: var(--text-error); white-space: pre-wrap; font-family: var(--font-monospace); font-size: var(--font-ui-smaller); }

@@ -21,6 +21,7 @@ const { resolveConfig } = require('./providers');
 const { chat } = require('./llm');
 const { SCHEMAS, Sandbox, execute } = require('./tools');
 const { loadEnv } = require('./env');
+const google = require('./google');
 
 const MAX_STEPS = Number(process.env.JARVIS_MAX_STEPS || 40);
 const HISTORY_KEEP = 60; // messages kept when resuming a long session
@@ -81,9 +82,20 @@ function systemPrompt(cwd, sandbox) {
     '- Today: ' + now.toISOString().slice(0, 10) + '\n\n' +
     'Tool-name mapping — instructions in this vault were written for Claude Code, so translate: ' +
     'Read→read_file, Write→write_file, Edit→edit_file, Glob→list_files, Grep→grep, WebSearch→web_search, WebFetch→web_fetch, Task/Agent→delegate_task, TodoWrite→(just keep a plan in your head). ' +
-    'Gmail / Google Calendar / other MCP tools are NOT available with this model backend: if a task needs them, say so in one line and do the rest. ' +
+    (google.isConnected(cwd)
+      ? 'Gmail and Google Calendar ARE available: MCP names map as search_threads→gmail_search, get_thread→gmail_read_thread, create_draft→gmail_create_draft, list events→calendar_list_events, create event→calendar_create_event. You can never send email — drafts only. '
+      : 'Gmail / Google Calendar are not connected: if a task needs them, say so in one line (setup: README → Gmail & Calendar) and do the rest. ') +
+    'Other MCP tools (Notion, Drive, Canva…) are not available with this backend. ' +
     'You have no delete tool on purpose — never try to delete; tell the owner what should be removed.'
   );
+  let owner = {};
+  try { owner = JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'jarvis.json'), 'utf8')); } catch {}
+  const name = process.env.JARVIS_OWNER_NAME || owner.ownerName || 'Boss';
+  const pron = (process.env.JARVIS_OWNER_PRONOUN || owner.pronoun || 'they').toLowerCase();
+  const curr = process.env.JARVIS_CURRICULUM || owner.curriculum || 'IB';
+  parts.push('# Owner\nAddress the owner as "' + name + '"; pronouns: ' + ({ he: 'he/him', she: 'she/her', they: 'they/them' }[pron] || 'they/them') + '. ' +
+    'Skill files in this vault were written calling the owner "Boss" and "he" — apply the name and pronouns above instead. ' +
+    (/^ib$/i.test(curr) ? 'Curriculum: IB.' : 'Curriculum: ' + curr + ' — where a skill cites IB criteria, papers or command terms, use the ' + curr + ' equivalents (check the official specification with web_search if unsure).'));
   for (const f of ['CLAUDE.md', 'AGENTS.md', 'JARVIS.md']) {
     try { const t = fs.readFileSync(path.join(cwd, f), 'utf8').trim(); if (t) parts.push('# Project instructions (' + f + ')\n\n' + t); } catch {}
   }
@@ -122,7 +134,8 @@ function saveSession(cwd, id, messages) {
 
 // ── The agent loop ──────────────────────────────────────────────────────────
 async function runAgent({ cfg, sandbox, system, messages, onText, depth = 0 }) {
-  const tools = depth > 0 ? SCHEMAS.filter(t => t.function.name !== 'delegate_task') : SCHEMAS;
+  const all = google.isConnected(sandbox.cwd) ? SCHEMAS.concat(google.SCHEMAS) : SCHEMAS;
+  const tools = depth > 0 ? all.filter(t => t.function.name !== 'delegate_task') : all;
   let finalText = '', spoke = false;
   const ctx = {
     delegate: async (task, agentName) => {
@@ -162,7 +175,7 @@ async function runAgent({ cfg, sandbox, system, messages, onText, depth = 0 }) {
       let out;
       if (args === null) out = { text: 'Invalid JSON arguments — retry the call with valid JSON.' };
       else {
-        try { out = await execute(sandbox, tc.function.name, args, ctx); }
+        try { out = google.names.includes(tc.function.name) ? { text: await google.execute(sandbox.cwd, tc.function.name, args) } : await execute(sandbox, tc.function.name, args, ctx); }
         catch (e) { out = { text: 'Error: ' + e.message }; }
       }
       if (process.env.JARVIS_DEBUG) process.stderr.write('[tool] ' + tc.function.name + ' ' + JSON.stringify(args).slice(0, 200) + '\n');

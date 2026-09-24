@@ -1,0 +1,16 @@
+{
+  "name": "vault-jarvis",
+  "version": "1.0.0",
+  "private": true,
+  "description": "V.A.U.L.T. — a voice-first J.A.R.V.I.S. for your Obsidian vault. Runs on free Gemini, Groq, OpenRouter, Ollama, OpenAI or Anthropic.",
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node .claude/start.js",
+    "restart": "node .claude/start.js --restart",
+    "test": "node test/run.js",
+    "selftest": "node .claude/agent/selftest.js",
+    "build": "node obsidian-plugin/build.js",
+    "google:auth": "node .claude/agent/google.js auth"
+  }
+}

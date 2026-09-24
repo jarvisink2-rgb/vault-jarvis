@@ -1,6 +1,6 @@
 ---
 name: mark-my-work
-description: Mark an essay, IA, EE, lab report or oral against the real IB assessment criteria and give criterion-by-criterion feedback. Use when Boss says "mark this", "grade my essay", "feedback on my IA", "is this good enough", "改我的作業", or clicks MARK MY WORK in the dashboard.
+description: Mark an essay, IA, EE, lab report or oral against the real assessment criteria (IB built in; other curricula supported) and give criterion-by-criterion feedback. Use when Boss says "mark this", "grade my essay", "feedback on my IA", "is this good enough", "改我的作業", or clicks MARK MY WORK in the dashboard.
 ---
 
 # MARK MY WORK (rubric feedback)
@@ -14,6 +14,8 @@ Establish — from what he says, the file, or one crisp question — the **subje
 Read the whole thing before writing a word of feedback. If it is a photo or PDF, read the image. If he names a file, Glob for it across the vault.
 
 ## 2. Load the right criteria
+
+> **Curriculum:** the tables below are the built-in **IB** rubrics. If the owner's curriculum (see `.claude/jarvis.json` / the system prompt) is not IB — AP, A-Level, GCSE, national exams — use that curriculum's official criteria instead, looking them up if needed. Never mark non-IB work against IB criteria.
 
 | Task | Criteria |
 |---|---|

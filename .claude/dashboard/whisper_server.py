@@ -8,11 +8,12 @@ MODEL = os.environ.get('WHISPER_MODEL', 'small')  # multilingual: understands En
 # Domain prior. Whisper leans on this heavily for proper nouns and acronyms, which is where
 # a general model fails on IB vocabulary. Cheap, and the single biggest accuracy win here.
 PROMPT = os.environ.get('WHISPER_PROMPT') or (
-    'Jarvis, my vault assistant. Boss. IB Diploma, HL, SL, IA, EE, TOK, CAS, Extended Essay, '
-    'Computer Science, Math AA, Physics, Psychology, English A, Chinese A, SAT, Bluebook, Digital SAT, '
+    # Vocabulary hint for recognition. Personalise with WHISPER_PROMPT (e.g. your subjects, names, book titles).
+    'Jarvis, my vault assistant. Boss. IB Diploma, AP, A-Level, HL, SL, IA, EE, TOK, Extended Essay, '
+    'Computer Science, Math, Physics, Chemistry, Biology, Psychology, English, SAT, '
     'Paper 1, Paper 2, criterion, mark scheme, past paper, revision, syllabus, Obsidian, vault, wikilink, '
     'morning report, night review, inbox brief, deep research, quiz me. '
-    '賈維斯，我的筆記助理。中文筆記、複習、考試、報告、行事曆、電子郵件、但以理書、聖經、活著、做工的人、小氣財神。')
+    '賈維斯，我的筆記助理。中文筆記、複習、考試、報告、行事曆、電子郵件。')
 print('[whisper] loading model:', MODEL, flush=True)
 model = WhisperModel(MODEL, device='cpu', compute_type='int8')
 print('[whisper] ready', flush=True)
