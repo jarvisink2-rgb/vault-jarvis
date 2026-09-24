@@ -22,10 +22,12 @@ function readSettings() {
   try { s = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8')); } catch {}
   const env = process.env;
   const pronoun = String(env.JARVIS_OWNER_PRONOUN || s.pronoun || 'they').toLowerCase();
+  // Names are inserted into prompts, HTML and JS — strip control characters; escaping happens at each sink.
+  const clean = v => String(v || '').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, 40);
   return {
-    ownerName: String(env.JARVIS_OWNER_NAME || s.ownerName || 'Boss').trim().slice(0, 40) || 'Boss',
+    ownerName: clean(env.JARVIS_OWNER_NAME || s.ownerName || 'Boss') || 'Boss',
     pronoun: ['he', 'she', 'they'].includes(pronoun) ? pronoun : 'they',
-    curriculum: String(env.JARVIS_CURRICULUM || s.curriculum || 'IB').trim().slice(0, 40) || 'IB',
+    curriculum: clean(env.JARVIS_CURRICULUM || s.curriculum || 'IB') || 'IB',
   };
 }
 function writeSettings(patch) {
@@ -48,10 +50,10 @@ function caseLike(src, word) { return src[0] === src[0].toUpperCase() ? word[0].
 function honor(text, settings) {
   const s = settings || readSettings();
   let t = String(text);
-  if (s.ownerName !== 'Boss') t = t.replace(/\bBoss\b/g, s.ownerName);
+  if (s.ownerName !== 'Boss') t = t.replace(/\bBoss\b/g, () => s.ownerName);   // function form: "$&" in a name stays literal
   const map = PRONOUNS[s.pronoun];
   if (map) {
-    t = t.replace(/\b(sir|Sir)\b/g, m => map.sir ? caseLike(m, map.sir) : s.ownerName);
+    t = t.replace(/\b(sir|Sir)\b/g, m => map.sir ? caseLike(m, map.sir) : s.ownerName);   // function form, as above
     t = t.replace(/\b(he|He|him|Him|his|His|himself|Himself)\b/g, m => caseLike(m, map[m.toLowerCase()]));
     if (s.pronoun === 'they') {
       t = t.replace(/\b(they|They) (is|was|has|does|says|wants|asks|needs|knows|writes|speaks|sounds|insists|uses|mentions|references|gives|chose|clicks|goes|reads|sees|likes|looks|thinks)\b/g,
@@ -62,7 +64,18 @@ function honor(text, settings) {
 }
 
 const PORT = process.env.PORT || 3333;
-const KEY = process.env.JARVIS_KEY || crypto.randomBytes(4).toString('hex');
+// Listen on loopback only unless the owner opts into same-Wi-Fi phone access (JARVIS_LAN=1).
+const HOST = process.env.JARVIS_LAN === '1' ? '0.0.0.0' : '127.0.0.1';
+// 128-bit access key, stable across restarts: JARVIS_KEY, else .claude/.jarvis-key (created 0600, git-ignored).
+const KEY_PATH = path.join(VAULT, '.claude', '.jarvis-key');
+function loadKey() {
+  if (process.env.JARVIS_KEY && process.env.JARVIS_KEY.length >= 16) return process.env.JARVIS_KEY;
+  try { const k = fs.readFileSync(KEY_PATH, 'utf8').trim(); if (/^[0-9a-f]{32,}$/.test(k)) return k; } catch {}
+  const k = crypto.randomBytes(16).toString('hex');
+  try { fs.mkdirSync(path.dirname(KEY_PATH), { recursive: true }); fs.writeFileSync(KEY_PATH, k + '\n', { mode: 0o600 }); } catch {}
+  return k;
+}
+const KEY = loadKey();
 const SERVER_START = Date.now();
 
-module.exports = { DASH, VAULT, PORT, KEY, SERVER_START, SETTINGS_PATH, readSettings, writeSettings, honor };
+module.exports = { DASH, VAULT, PORT, HOST, KEY, KEY_PATH, SERVER_START, SETTINGS_PATH, readSettings, writeSettings, honor };

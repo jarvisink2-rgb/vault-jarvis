@@ -1,7 +1,7 @@
 {
   "id": "vault-jarvis",
   "name": "VAULT Jarvis",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "minAppVersion": "1.5.0",
   "description": "Run a voice-first, JARVIS-style AI assistant over your notes. Works with free Gemini, Groq, OpenRouter, local Ollama, OpenAI or Anthropic.",
   "author": "jarvisink2-rgb",

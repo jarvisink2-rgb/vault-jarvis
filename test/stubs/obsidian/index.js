@@ -4,5 +4,5 @@ class Plugin { constructor(app){this.app=app;this._d=null} async loadData(){retu
 class ItemView{} class PluginSettingTab{}
 class Setting{}
 const notices=[]; class Notice{constructor(m){notices.push(m);console.log('[Notice]',m)}}
-async function requestUrl({url,method='GET'}){ const r=await fetch(url,{method}); return {status:r.status,text:await r.text()}; }
+async function requestUrl({url,method='GET',headers}){ const r=await fetch(url,{method,headers}); return {status:r.status,text:await r.text()}; }
 module.exports={Plugin,ItemView,PluginSettingTab,Setting,Notice,requestUrl,FileSystemAdapter,Platform:{isDesktopApp:true},notices};

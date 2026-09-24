@@ -9,7 +9,7 @@ const crypto = require('crypto');
 
 const root = path.resolve(__dirname, '..');
 const dist = path.join(root, 'dist');
-const SKIP = /(^|\/)(node_modules|agent-sessions|__pycache__)(\/|$)|\.bak|\.pre-improve$|google-token\.json$|convo-log\.json$|persona-learned\.txt$|nudges\.json$|folders\.json$|jarvis\.json$|\.DS_Store$|(^|\/)memory\/(memory|profile)\.md$/;
+const SKIP = /(^|\/)(node_modules|agent-sessions|__pycache__)(\/|$)|\.bak|\.pre-improve$|google-token\.json$|convo-log\.json$|persona-learned\.txt$|nudges\.json$|folders\.json$|jarvis\.json$|\.jarvis-key$|\.DS_Store$|(^|\/)memory\/(memory|profile)\.md$/;
 
 function walk(rel, out) {
   const abs = path.join(root, rel);

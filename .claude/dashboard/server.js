@@ -8,8 +8,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const { DASH, VAULT, PORT, KEY, readSettings, writeSettings, honor } = require('./lib/config');
-const { authed, lanIP } = require('./lib/net');
+const { DASH, VAULT, PORT, HOST, KEY, readSettings, writeSettings, honor } = require('./lib/config');
+const { gate, lanIP } = require('./lib/net');
 const { readGrants, writeGrants } = require('./lib/grants');
 const { mdFiles, linkGraph, readNote, resolveWiki } = require('./lib/vault');
 const { vaultSearch, chunkCount } = require('./lib/search');
@@ -20,14 +20,19 @@ const { runAsk, runClaude, interruptWorker, killWorker } = require('./lib/agent'
 const { nudge, greet } = require('./lib/nudges');
 
 // ---------- The HUD page: public/ files inlined into one response (works as a phone PWA) ----------
+// Values are escaped for where they land: JSON inside <script> (no "</script>" breakout), text inside HTML.
+// The owner's name is applied by the page itself (see OWNER in app.js) — the JS source is never regex-rewritten.
+const jsonForScript = v => JSON.stringify(v).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+const htmlEsc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function page() {
   const rd = f => fs.readFileSync(path.join(DASH, 'public', f), 'utf8');
   const s = readSettings();
   const skills = SKILLS.map(({ id, label, input }) => ({ id, label, input }));
-  const html = honor(rd('index.html'), s);
-  const js = honor(rd('app.js'), s);
-  return html.replace('/*__CSS__*/', () => rd('style.css')).replace('/*__JS__*/', () => js)
-    .replace('__SKILLS__', () => JSON.stringify(skills)).replace(/__KEY__/g, KEY);
+  const pr = { he: 'sir', she: "ma'am", they: s.ownerName }[s.pronoun] || s.ownerName;
+  const owner = { name: s.ownerName, sir: pr };
+  const html = rd('index.html').replace(/\bBoss\b/g, () => htmlEsc(s.ownerName));
+  return html.replace('/*__CSS__*/', () => rd('style.css')).replace('/*__JS__*/', () => rd('app.js'))
+    .replace('__SKILLS__', () => jsonForScript(skills)).replace('__OWNER__', () => jsonForScript(owner)).replace(/__KEY__/g, KEY);
 }
 
 startWhisper();
@@ -35,12 +40,29 @@ process.on('exit', stopWhisper);
 process.on('SIGINT', () => process.exit(0));
 process.on('SIGTERM', () => process.exit(0));
 
-http.createServer((req, res) => {
+// Read a request body with a hard size cap (413 beyond it). Returns a Buffer, or null if refused.
+function readBody(req, res, limit) {
+  return new Promise(resolve => {
+    const bufs = []; let len = 0, done = false;
+    req.on('data', d => { if (done) return; len += d.length;
+      if (len > limit) { done = true; try { res.writeHead(413); res.end('too large'); } catch {} req.destroy(); return resolve(null); }
+      bufs.push(d); });
+    req.on('end', () => { if (!done) { done = true; resolve(Buffer.concat(bufs)); } });
+    req.on('error', () => { if (!done) { done = true; resolve(null); } });
+  });
+}
+const json = b => { try { return JSON.parse(b.toString('utf8')); } catch { return {}; } };
+const LIMIT = { ask: 64e3, run: 64e3, tts: 16e3, folders: 20e3, settings: 5e3, stt: 15e6, upload: 125e6 };
+
+http.createServer(async (req, res) => {
   const p0 = req.url.split('?')[0];
-  if (!authed(req)) { res.writeHead(401); return res.end('unauthorized'); }
+  if (req.method === 'GET' && p0 === '/health') { res.writeHead(200); return res.end('ok'); }   // liveness only, no data
+  const isPage = req.method === 'GET' && (p0 === '/' || p0 === '/manifest.json' || p0 === '/icon.png');
+  const denied = gate(req, isPage ? 'page' : 'api');
+  if (denied) { res.writeHead(denied.status, { 'content-type': 'text/plain' }); return res.end(denied.msg); }
   if (req.method === 'GET' && p0 === '/manifest.json') {
     res.writeHead(200, { 'content-type': 'application/manifest+json' });
-    return res.end(JSON.stringify({ name: 'JARVIS', short_name: 'JARVIS', start_url: '/?key=' + KEY,
+    return res.end(JSON.stringify({ name: 'JARVIS', short_name: 'JARVIS', start_url: '/?key=' + KEY,   // phone home-screen app needs it once
       display: 'standalone', background_color: '#0B0D10', theme_color: '#0B0D10',
       icons: [{ src: '/icon.png?key=' + KEY, sizes: '512x512', type: 'image/png' }] }));
   }
@@ -55,20 +77,18 @@ http.createServer((req, res) => {
     return res.end(JSON.stringify({ text: p0 === '/nudge' ? nudge(zh) : greet(zh) }));
   }
   if (req.method === 'POST' && p0 === '/stt') {
-    const bufs = []; let len = 0;
-    req.on('data', d => { bufs.push(d); len += d.length; if (len > 15e6) req.destroy(); });
-    req.on('end', () => sttProxy(Buffer.concat(bufs), res, String(req.headers['x-lang'] || 'auto').slice(0, 8)));
-    return;
+    const b = await readBody(req, res, LIMIT.stt); if (!b) return;
+    return sttProxy(b, res, String(req.headers['x-lang'] || 'auto').slice(0, 8));
   }
   if (req.method === 'POST' && p0 === '/upload') {
-    let body = ''; let killed = false;
-    req.on('data', d => { body += d; if (body.length > 125e6 && !killed) { killed = true; res.writeHead(413); res.end('too large'); req.destroy(); } });
-    req.on('end', () => { if (killed) return;
-      try { const j = JSON.parse(body);
+    const body = await readBody(req, res, LIMIT.upload); if (!body) return;
+    {
+      try { const j = JSON.parse(body.toString('utf8'));
         const b64 = String(j.data || '').split(',').pop();
         const safe = String(j.name || 'image.png').replace(/[^\w.\- ]/g, '').slice(-60) || 'image.png';
         const ts = new Date(); const pad = n => String(n).padStart(2, '0');
         const rel = 'raw/' + ts.toISOString().slice(0, 10) + ' ' + pad(ts.getHours()) + pad(ts.getMinutes()) + pad(ts.getSeconds()) + ' ' + safe;
+        fs.mkdirSync(path.join(VAULT, 'raw'), { recursive: true });
         fs.writeFileSync(path.join(VAULT, rel), Buffer.from(b64, 'base64'));
         const isVideo = /\.(mp4|mov|webm|mkv|avi|m4v)$/i.test(safe);
         if (isVideo) {
@@ -85,11 +105,18 @@ http.createServer((req, res) => {
           return;
         }
         res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ file: rel }));
-      } catch (e) { res.writeHead(400); res.end('bad upload'); } });
+      } catch (e) { res.writeHead(400); res.end('bad upload'); }
+    }
     return;
   }
   if (req.method === 'GET' && p0 === '/') {
-    res.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store, must-revalidate', 'pragma': 'no-cache' });
+    const hdr = { 'content-type': 'text/html', 'cache-control': 'no-store, must-revalidate', 'pragma': 'no-cache',
+      'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff',
+      // only this origin and the Obsidian plugin may frame the HUD (no clickjacking from other sites)
+      'content-security-policy': "frame-ancestors 'self' app://obsidian.md" };
+    // Opened with ?key=… (phone link): remember it in a strict cookie so the key can leave the address bar.
+    if (/[?&]key=/.test(req.url)) hdr['set-cookie'] = 'jarvis_key=' + KEY + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000';
+    res.writeHead(200, hdr);
     return res.end(page());
   }
   if (req.method === 'GET' && p0 === '/stats') {
@@ -128,10 +155,9 @@ http.createServer((req, res) => {
     return res.end(JSON.stringify({ vault: VAULT, grants: readGrants() }));
   }
   if (req.method === 'POST' && p0 === '/folders') {
-    let body = '';
-    req.on('data', d => { body += d; if (body.length > 20000) req.destroy(); });
-    req.on('end', () => {
-      let j = {}; try { j = JSON.parse(body); } catch {}
+    const b = await readBody(req, res, LIMIT.folders); if (!b) return;
+    {
+      const j = json(b);
       let list = readGrants().map(g => ({ path: g.path, write: g.write, label: g.label }));
       if (j.remove) {
         const rm = path.resolve(String(j.remove));
@@ -144,46 +170,44 @@ http.createServer((req, res) => {
         let ok = false; try { ok = fs.statSync(p).isDirectory(); } catch {}
         if (!ok) { res.writeHead(400, { 'content-type': 'application/json' });
           return res.end(JSON.stringify({ error: 'not-a-folder', path: p })); }
+        if (p === path.parse(p).root || p === os.homedir()) { res.writeHead(400, { 'content-type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'too-broad', path: p })); }   // never the whole disk or whole home folder
         if (!list.some(g => g.path === p)) list.push({ path: p, write: !!j.write, label: j.label || path.basename(p) });
       }
       writeGrants(list);
       killWorker();          // --add-dir is fixed at spawn — restart so the change is live now
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ vault: VAULT, grants: readGrants() }));
-    });
+    }
     return;
   }
   if (p0 === '/settings') {           // owner name / pronoun / curriculum (used by the Obsidian plugin too)
     if (req.method === 'GET') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(readSettings())); }
     if (req.method === 'POST') {
-      let body = '';
-      req.on('data', d => { body += d; if (body.length > 5000) req.destroy(); });
-      req.on('end', () => { let j = {}; try { j = JSON.parse(body); } catch {}
+      const b = await readBody(req, res, LIMIT.settings); if (!b) return;
+      { const j = json(b);
         const patch = {};
         for (const k of ['ownerName', 'pronoun', 'curriculum']) if (typeof j[k] === 'string') patch[k] = j[k];
         const s = writeSettings(patch); killWorker(); // persona is baked in at session start
-        res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(s)); });
+        res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(s)); }
       return;
     }
   }
-  if (req.method === 'POST' && p0 === '/shutdown') {   // used by start.js --restart and the Obsidian plugin; localhost only
+  if (req.method === 'POST' && p0 === '/shutdown') {   // used by start.js --restart and the Obsidian plugin; key + localhost
     const ip = req.socket.remoteAddress || '';
     if (!/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(ip)) { res.writeHead(403); return res.end('local only'); }
     res.writeHead(200); res.end('bye'); setTimeout(() => process.exit(0), 100); return;
   }
   if (req.method === 'POST' && p0 === '/stop') { interruptWorker(); res.writeHead(200); return res.end('ok'); }
   if (req.method === 'POST' && p0 === '/tts') {
-    let body = '';
-    req.on('data', d => body += d);
-    req.on('end', () => { let j = {}; try { j = JSON.parse(body); } catch {}
-      tts(String(j.t || ''), res, String(j.lang || '').slice(0, 4), String(j.mode || '').slice(0, 4)); });
-    return;
+    const b = await readBody(req, res, LIMIT.tts); if (!b) return;
+    const j = json(b);
+    return tts(String(j.t || ''), res, String(j.lang || '').slice(0, 4), String(j.mode || '').slice(0, 4));
   }
   if (req.method === 'POST' && (p0 === '/run' || p0 === '/ask')) {
-    let body = '';
-    req.on('data', d => body += d);
-    req.on('end', () => {
-      let j = {}; try { j = JSON.parse(body); } catch {}
+    const b = await readBody(req, res, LIMIT.ask); if (!b) return;
+    {
+      const j = json(b);
       if (p0 === '/ask') {
         if (!j.q) { res.writeHead(400); return res.end('empty'); }
         return runAsk(String(j.q), res, String(j.ctx || '').slice(0, 500), String(j.lang || '').slice(0, 8));
@@ -191,13 +215,12 @@ http.createServer((req, res) => {
       const skill = SKILLS.find(s => s.id === j.id);
       if (!skill) { res.writeHead(400); return res.end('unknown skill'); }
       counters.skillInvocations++;
-      return runClaude(honor(skill.prompt(String(j.input || ''))), res, null, skill.label);
-    });
-    return;
+      return runClaude(honor(skill.prompt(String(j.input || '').slice(0, 4000))), res, null, skill.label);
+    }
   }
   res.writeHead(404); res.end();
-}).listen(PORT, '0.0.0.0', () => {
-  console.log('V.A.U.L.T. online → http://localhost:' + PORT);
+}).listen(PORT, HOST, () => {
+  console.log('V.A.U.L.T. online → http://localhost:' + PORT + (HOST === '127.0.0.1' ? '  (this computer only — set JARVIS_LAN=1 for same-Wi-Fi phone access)' : ''));
   const ip = lanIP();
-  if (ip) console.log('📱 Phone (same Wi-Fi) → http://' + ip + ':' + PORT + '/?key=' + KEY);
+  if (ip && HOST !== '127.0.0.1') console.log('📱 Phone (same Wi-Fi) → http://' + ip + ':' + PORT + '/?key=' + KEY);
 });

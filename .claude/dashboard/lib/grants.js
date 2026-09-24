@@ -35,9 +35,7 @@ function grantArgs() {                       // --add-dir per valid grant, vault
   const out = [];
   for (const g of readGrants()) {
     if (!g.ok) continue;
-    if (g.path === VAULT || VAULT.startsWith(g.path + path.sep) || g.path.startsWith(VAULT + path.sep)) {
-      if (g.path === VAULT) continue;        // cwd already
-    }
+    if (g.path === VAULT) continue;          // the vault is the working directory already
     out.push('--add-dir', g.path);
   }
   return out;

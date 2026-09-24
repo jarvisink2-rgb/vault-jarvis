@@ -37,7 +37,9 @@ npm run build     # builds the Obsidian plugin into dist/
 - Keep it dependency-free. If you truly need a library, vendor a bundled copy (see `lib/vendor/`).
 - Text shown to or about the owner is written as "Boss"/"sir"/"he"; `honor()` rewrites it for the configured owner. Use it for any new user-facing string.
 - Tools return readable strings; errors become tool results, not crashes.
-- New tools must respect the sandbox (`Sandbox.resolve` / `resolveWritable`).
+- New tools must respect the sandbox (`Sandbox.resolve` / `resolveWritable`). New routes go through `gate()` in `lib/net.js`; read bodies with `readBody()` and a size cap.
+- Anything shown or said in the HUD may contain the owner's name — inject data via `jsonForScript`/`htmlEsc`, never by rewriting source.
+- Security fixes need a regression test in `test/security.test.js`.
 
 ## Releasing the plugin
 

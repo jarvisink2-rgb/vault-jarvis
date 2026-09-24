@@ -1,6 +1,12 @@
 
-var SKILLS = __SKILLS__, KEY = '__KEY__';
+var SKILLS = __SKILLS__, KEY = '__KEY__', OWNER = __OWNER__;
 (function(){ var _f = window.fetch; window.fetch = function(u, o){ o = o || {}; var h = o.headers || {}; h['x-key'] = KEY; o.headers = h; return _f(u, o); }; })();
+// The key arrived in the URL (phone link) — the server set a strict cookie, so take it out of the address bar/history.
+if (/[?&]key=/.test(location.search)) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+// Built-in lines are written for "Boss"/"sir"; swap in the configured owner at runtime (data, not source rewriting).
+function H(t){ if (typeof t !== 'string') return t;
+  return t.replace(/\bBoss\b/g, function(){ return OWNER.name; }).replace(/\b(sir|Sir)\b/g, function(m){ var w = OWNER.sir; return m === 'Sir' ? w.charAt(0).toUpperCase() + w.slice(1) : w; }); }
+function Hdeep(o){ for (var k in o){ if (typeof o[k] === 'string') o[k] = H(o[k]); else if (o[k] && typeof o[k] === 'object') Hdeep(o[k]); } return o; }
 var THEMES = {
   dark: { light: false, p: '79,209,224', pB: '127,227,238', pBB: '184,244,251', a: '79,209,224', aB: '127,227,238', star: '150,215,225', nuc: '184,244,251',
     core: { b: '30,110,122', m: '79,209,224', h: '184,244,251' },
@@ -67,6 +73,7 @@ zh:{ core:{idle:'待命',listening:'聆聽中',thinking:'處理中',speaking:'�
   nohits:'— 沒有符合的內容 —', graph:'筆記關聯圖', ghint:'拖曳節點 · 點擊開啟 · ESC 關閉',
   skills:{'quiz':'互動學習','past-paper':'模擬考卷','mark':'批改作業','night-review':'晚間回顧','morning-report':'晨間報告','inbox':'信箱簡報','draft-reply':'草擬回信','deep-research':'深度研究','process-inbox':'處理收件匣','link':'連結筆記','organize':'整理檔案','index':'重建索引','weekly-plan':'週計畫','gap-audit':'進度差距審查','calendar':'行事曆簡報','review':'複習卷'} }
 };
+Hdeep(UI);
 /* Mandarin voice: auto = Taiwanese unless the line contains English, then a bilingual voice.
    tw = always Taiwanese (best accent, mangles English). mix = always bilingual (correct English,
    Mainland accent). There is no Taiwanese multilingual voice, so this trade-off is his to make. */
@@ -138,13 +145,13 @@ function speakSent(sent){ if (!audioOn) return; sent = cleanForSpeech(sent).trim
   speakingText = (speakingText + ' ' + sent.toLowerCase()).slice(-800);
   globeWave(0.55); // one ripple per sentence he speaks
   if (neural){ ttsQ.push(sent); playNext(); } else sysSpeak(sent); }
-function speak(text){ if (!audioOn) return; speechSynthesis.cancel(); speakingText = '';
+function speak(text){ text = H(text); if (!audioOn) return; speechSynthesis.cancel(); speakingText = '';
   var parts = cleanForSpeech(text).match(/[^.!?。！？\n]+[.!?。！？\n]*/g) || [text];
   parts.slice(0, 20).forEach(function(p){ speakSent(p); }); }
 /* ================= FEED / ASK ================= */
 function nearBottom(){ return feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80; }
 function autoScroll(force){ if (force || nearBottom()) feed.scrollTop = feed.scrollHeight; }
-function add(cls, t){ if (typeof syncFeed === 'function') setTimeout(syncFeed, 0);
+function add(cls, t){ if (cls === 'j') t = H(t); if (typeof syncFeed === 'function') setTimeout(syncFeed, 0);
   var d = document.createElement('div'); d.className = cls; d.textContent = t;
   var f = nearBottom(); feed.appendChild(d); autoScroll(f || cls === 'u'); while (feed.children.length > 40) feed.removeChild(feed.firstChild); return d; }
 async function stream(url, bodyObj, node, onDelta){ if (controller) controller.abort(); controller = new AbortController();
@@ -156,6 +163,7 @@ async function stream(url, bodyObj, node, onDelta){ if (controller) controller.a
   return full; }
 var ACKS = ['Right away, Boss.', 'As you wish.', 'On it, sir.', 'One moment, Boss.', 'Working on it now.', 'Let me have a look, sir.', 'Ah. Let me pull that up.', 'Checking now, Boss.', 'Very good, sir — one moment.'];
 var ACKS_ZH = ['馬上就來，Boss。', '遵命。', '我看看，Boss。', '稍等一下，Boss。', '這就去辦。'];
+ACKS = ACKS.map(H); ACKS_ZH = ACKS_ZH.map(H);
 function zhMode(q){ return lang === 'zh' || (lang === 'auto' && hasCJK(q)); }
 async function ask(q){ q = (q || '').trim(); if (!q) return;
   lastActivity = Date.now();

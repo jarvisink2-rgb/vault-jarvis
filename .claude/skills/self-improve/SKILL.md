@@ -1,6 +1,6 @@
 ---
 name: self-improve
-description: Nightly self-improvement — sync exams from calendar, learn from the day's conversations, tune Jarvis's live persona and nudges, optionally make one guarded code improvement. Use for "self improve", "train yourself", "reprogram yourself".
+description: Nightly self-improvement — sync exams from calendar, learn from the day's conversations, tune Jarvis's live persona and nudges, and propose (never apply) code improvements. Use for "self improve", "train yourself", "reprogram yourself".
 ---
 
 # Self-improvement (nightly, while Boss sleeps)
@@ -17,6 +17,6 @@ Work through ALL steps, in order. Be conservative: small, reversible changes onl
 
 4. **Tune nudges** — Rewrite `.claude/dashboard/nudges.json`: a JSON array of up to 5 short spoken nudge lines tailored to this week (exam-aware, JARVIS voice, address "Boss", offers phrased as "Shall I…?" / "Might I suggest…"). Must be valid JSON. These are spoken aloud when Boss is idle.
 
-5. **Code self-improvement (guarded)** — Optionally, make AT MOST ONE small improvement to `.claude/dashboard/server.js` — a better persona string, a smarter nudge rule, a small bug fix you are confident about. The wrapper script backs the file up and syntax-checks it afterwards; a broken file is auto-reverted. If nothing is clearly worth changing, change nothing. Never touch the auth, spawn, or permissions code.
+5. **Code suggestions (proposal only)** — You may NOT edit Jarvis's code, scripts or config (`.claude/agent/`, `.claude/dashboard/` except the two tuning files above, `.claude/automations/`, `.env`, launchers). The sandbox blocks it, and the nightly guard restores any code change regardless. If you see a worthwhile improvement, describe it in the report as a proposal: the file, the exact change as a small diff, and why. The owner decides and applies it.
 
-6. **Report** — Write `raw/<YYYY-MM-DD> Night Improvement.md` (frontmatter per vault conventions) with 5–15 lines: what you learned, what you changed (files + one-line diffs), what you recommend Boss decide on. It lands in his inbox so the morning report surfaces it.
+6. **Report** — Write `raw/<YYYY-MM-DD> Night Improvement.md` (frontmatter per vault conventions) with 5–15 lines: what you learned, what you changed (tuning files only), code proposals (as diffs, not applied), what you recommend Boss decide on. It lands in his inbox so the morning report surfaces it.

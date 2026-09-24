@@ -38,40 +38,73 @@ const SCHEMAS = [
 ];
 
 // ── Sandbox ─────────────────────────────────────────────────────────────────
+// The agent reads untrusted text (web pages, email), so a prompt injection must not be able to:
+//  • change Jarvis itself (its code, launchers, cron scripts, config) — that would be code execution,
+//  • read secrets (.env, OAuth token, access key) — they could be exfiltrated through web_fetch,
+//  • write through a symlink into a folder granted READ ONLY.
+// All checks use the real (symlink-resolved) path.
+const posix = p => p.split(path.sep).join('/');
+const WRITE_PROTECTED = [
+  /^\.env($|\.)/i,                                  // secrets
+  /^\.claude\/agent(\/|$)/, /^\.claude\/automations(\/|$)/, /^\.claude\/start\.js$/,
+  /^\.claude\/dashboard\/(?!(persona-learned\.txt|nudges\.json)$)/,   // code; the two tuning files stay writable
+  /^\.claude\/(jarvis\.json|\.jarvis-key)$/, /^\.claude\/agent-sessions(\/|$)/,
+  /^\.github(\/|$)/, /^(package\.json|obsidian-plugin\/|test\/)/,
+];
+const ANYWHERE_PROTECTED = [/(^|\/)\.git(\/|$)/, /(^|\/)\.obsidian(\/|$)/,
+  /\.(command|sh|bash|zsh|bat|cmd|ps1|psm1|vbs|exe|app|scpt|applescript|plist|desktop|service)$/i];   // nothing runnable, anywhere
+const READ_PROTECTED = [/^\.env($|\.)/i, /(^|\/)google-token\.json$/, /(^|\/)\.jarvis-key$/, /^\.claude\/agent-sessions(\/|$)/];
+
+function realish(p) {               // realpath of p, or of its deepest existing ancestor + the rest
+  let cur = p; const rest = [];
+  for (;;) {
+    try { return path.join(fs.realpathSync(cur), ...rest.reverse()); }
+    catch { const parent = path.dirname(cur); if (parent === cur) return p; rest.push(path.basename(cur)); cur = parent; }
+  }
+}
+const within = (p, root) => p === root || p.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
+
 class Sandbox {
   constructor(cwd, addDirs, full) {
     this.cwd = path.resolve(cwd);
+    this.realCwd = realish(this.cwd);
     this.full = !!full;
     this.roots = [this.cwd, ...addDirs.map(d => path.resolve(d.replace(/^~/, os.homedir())))];
+    this.realRoots = this.roots.map(realish);
     // Write access outside the vault only where the dashboard grant says so.
-    this.writable = new Set([this.cwd]);
+    const writable = [];
     try {
       const grants = JSON.parse(fs.readFileSync(path.join(this.cwd, '.claude', 'dashboard', 'folders.json'), 'utf8'));
-      for (const g of grants) if (g && g.write) this.writable.add(path.resolve(String(g.path).replace(/^~/, os.homedir())));
+      for (const g of grants) if (g && g.write) writable.push(path.resolve(String(g.path).replace(/^~/, os.homedir())));
     } catch {}
-    if (this.full) for (const r of this.roots) this.writable.add(r);
+    if (this.full) writable.push(...this.roots);
+    this.realWritable = [this.realCwd, ...writable.map(realish)];
   }
+  // vault-relative posix path of a real path (null if outside the vault)
+  vrel(real) { return within(real, this.realCwd) ? posix(path.relative(this.realCwd, real)) : null; }
   resolve(p) {
     if (!p || typeof p !== 'string') throw new Error('path is required');
-    const abs = path.resolve(this.cwd, p.replace(/^~(?=$|\/)/, os.homedir()));
-    // Follow symlinks for the check so a link inside the vault can't point outside it.
-    let real = abs;
-    try { real = fs.realpathSync(abs); } catch { try { real = path.join(fs.realpathSync(path.dirname(abs)), path.basename(abs)); } catch {} }
-    const realRoots = this.roots.map(r => { try { return fs.realpathSync(r); } catch { return r; } });
-    if (!realRoots.some(r => real === r || real.startsWith(r + path.sep))) {
-      throw new Error('Access denied: ' + p + ' is outside the vault and the granted folders.');
-    }
+    const abs = path.resolve(this.cwd, p.replace(/^~(?=$|[\\/])/, os.homedir()));
+    const real = realish(abs);
+    if (!this.realRoots.some(r => within(real, r))) throw new Error('Access denied: ' + p + ' is outside the vault and the granted folders.');
+    const rel = this.vrel(real);
+    if (rel !== null && READ_PROTECTED.some(re => re.test(rel))) throw new Error('Access denied: ' + p + ' holds secrets Jarvis must not read.');
     return abs;
   }
   resolveWritable(p) {
     const abs = this.resolve(p);
-    // The vault is always writable, even if it sits inside a read-only grant.
-    const inVault = abs === this.cwd || abs.startsWith(this.cwd + path.sep);
-    const ok = inVault || [...this.writable].some(r => abs === r || abs.startsWith(r + path.sep));
-    if (!ok) throw new Error('Read-only: ' + p + ' is in a folder granted READ ONLY. Write the result into the vault (output/) instead.');
-    if (abs.split(path.sep).some(s => s === '.git' || s === '.obsidian')) throw new Error('Refusing to write inside .git/.obsidian.');
+    const real = realish(abs);
+    if (!this.realWritable.some(r => within(real, r)))
+      throw new Error('Read-only: ' + p + ' is in a folder granted READ ONLY. Write the result into the vault (output/) instead.');
+    const rel = this.vrel(real), lex = posix(path.relative(this.cwd, abs));
+    for (const r of [rel, lex]) {
+      if (r === null || r.startsWith('..')) continue;
+      if (WRITE_PROTECTED.some(re => re.test(r))) throw new Error('Protected: Jarvis cannot modify its own code, launchers, schedules or secrets (' + r + '). Describe the change for the owner instead.');
+    }
+    if (ANYWHERE_PROTECTED.some(re => re.test(posix(real)) || re.test(posix(abs)))) throw new Error('Protected: no writing inside .git/.obsidian or creating runnable files (' + p + ').');
     return abs;
   }
+  readable(abs) { const rel = this.vrel(realish(abs)); return rel === null || !READ_PROTECTED.some(re => re.test(rel)); }
   rel(abs) { const r = path.relative(this.cwd, abs); return r.startsWith('..') ? abs : r; }
 }
 
@@ -146,16 +179,81 @@ async function webSearch(query, n) {
   return out.length ? out.join('\n') : 'No results (the keyless search fallback may be rate-limited — set TAVILY_API_KEY or BRAVE_API_KEY).';
 }
 
+// web_fetch must not become a way into the owner's own machine or network (SSRF):
+// every hop's DNS answer is checked inside the socket's own lookup, so it can't be swapped afterwards.
+const net = require('net');
+const dns = require('dns');
+function privateIP(ip) {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+  }
+  const v = ip.toLowerCase();
+  if (v.startsWith('::ffff:')) return privateIP(v.slice(7));
+  return v === '::' || v === '::1' || v.startsWith('fc') || v.startsWith('fd') || v.startsWith('fe8') || v.startsWith('fe9') || v.startsWith('fea') || v.startsWith('feb') || v.startsWith('ff');
+}
+function guardedLookup(host, opts, cb) {
+  dns.lookup(host, { all: true }, (err, addrs) => {
+    if (err) return cb(err);
+    const bad = addrs.find(a => privateIP(a.address));
+    if (bad && !process.env.JARVIS_ALLOW_PRIVATE_FETCH) return cb(new Error('Blocked: ' + host + ' resolves to a private/local address (' + bad.address + ').'));
+    if (opts && opts.all) return cb(null, addrs);
+    cb(null, addrs[0].address, addrs[0].family);
+  });
+}
+function getOnce(u) {
+  const mod = u.protocol === 'https:' ? require('https') : require('http');
+  return new Promise((resolve, reject) => {
+    if (net.isIP(u.hostname.replace(/^\[|\]$/g, '')) && privateIP(u.hostname.replace(/^\[|\]$/g, '')) && !process.env.JARVIS_ALLOW_PRIVATE_FETCH)
+      return reject(new Error('Blocked: ' + u.hostname + ' is a private/local address.'));
+    const req = mod.get(u, { lookup: guardedLookup, headers: { 'user-agent': 'Mozilla/5.0 (VAULT-Jarvis)', 'accept-encoding': 'identity' }, timeout: 20000 }, res => {
+      const chunks = []; let len = 0;
+      res.on('data', d => { len += d.length; if (len <= 3e6) chunks.push(d); else res.destroy(); });
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString('utf8') }));
+      res.on('close', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString('utf8') }));
+    });
+    req.on('timeout', () => req.destroy(new Error('timed out')));
+    req.on('error', reject);
+  });
+}
 async function webFetch(url) {
-  if (!/^https?:\/\//i.test(url)) throw new Error('Only http(s) URLs are allowed.');
-  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
-  try {
-    const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (VAULT-Jarvis)' }, redirect: 'follow', signal: ctl.signal });
-    const type = r.headers.get('content-type') || '';
-    const body = await r.text();
-    const text = /html/i.test(type) ? htmlToText(body) : body;
-    return 'URL: ' + r.url + '\nStatus: ' + r.status + '\n\n' + text.slice(0, 40000) + (text.length > 40000 ? '\n…[truncated]' : '');
-  } finally { clearTimeout(t); }
+  let u; try { u = new URL(url); } catch { throw new Error('Invalid URL.'); }
+  for (let hop = 0; hop < 6; hop++) {
+    if (!/^https?:$/.test(u.protocol)) throw new Error('Only http(s) URLs are allowed.');
+    const r = await getOnce(u);
+    if (r.status >= 300 && r.status < 400 && r.headers.location) { u = new URL(r.headers.location, u); continue; }
+    const type = r.headers['content-type'] || '';
+    const text = /html/i.test(type) ? htmlToText(r.body) : r.body;
+    return 'URL: ' + u.href + '\nStatus: ' + r.status + '\n\n' + text.slice(0, 40000) + (text.length > 40000 ? '\n…[truncated]' : '');
+  }
+  throw new Error('Too many redirects.');
+}
+
+// ── grep worker ─────────────────────────────────────────────────────────────
+const GREP_TIMEOUT_MS = 5000;
+const GREP_WORKER = `
+const { parentPort, workerData: w } = require('worker_threads');
+const fs = require('fs');
+const re = new RegExp(w.pattern, 'i'); const out = [];
+for (const f of w.files) {
+  let txt; try { if (fs.statSync(f).size > 2e6) continue; txt = fs.readFileSync(f, 'utf8'); } catch { continue; }
+  const lines = txt.split('\\n');
+  for (let i = 0; i < lines.length && out.length < w.max; i++) {
+    const l = lines[i].length > 5000 ? lines[i].slice(0, 5000) : lines[i];
+    if (re.test(l)) out.push({ f, n: i + 1, line: l.slice(0, 300) });
+  }
+  if (out.length >= w.max) break;
+}
+parentPort.postMessage(out);`;
+function grepInWorker(pattern, files, max, timeoutMs) {
+  const { Worker } = require('worker_threads');
+  return new Promise(resolve => {
+    const wk = new Worker(GREP_WORKER, { eval: true, workerData: { pattern, files, max } });
+    const t = setTimeout(() => { wk.terminate(); resolve(null); }, timeoutMs);
+    wk.once('message', m => { clearTimeout(t); wk.terminate(); resolve(m); });
+    wk.once('error', () => { clearTimeout(t); resolve([]); });
+  });
 }
 
 // ── Executor ────────────────────────────────────────────────────────────────
@@ -212,32 +310,25 @@ async function execute(sb, name, args, ctx) {
       const pat = String(args.pattern || '**/*').replace(/^\.\//, '');
       const re = globToRegex(pat);
       const files = []; walk(base, /(^|\/)\./.test(pat), files, 20000);
-      const hits = files.filter(f => re.test(path.relative(base, f).split(path.sep).join('/')));
+      const hits = files.filter(f => re.test(path.relative(base, f).split(path.sep).join('/')) && sb.readable(f));
       hits.sort((a, b) => { try { return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs; } catch { return 0; } });
       if (!hits.length) return { text: 'No files match ' + pat + (args.path ? ' in ' + args.path : '') + '.' };
       const shown = hits.slice(0, 300).map(f => sb.rel(f));
       return { text: shown.join('\n') + (hits.length > 300 ? '\n…and ' + (hits.length - 300) + ' more' : '') };
     }
     case 'grep': {
-      let re; try { re = new RegExp(args.pattern, 'i'); } catch (e) { return { text: 'Invalid regex: ' + e.message }; }
+      try { new RegExp(args.pattern, 'i'); } catch (e) { return { text: 'Invalid regex: ' + e.message }; }
       const base = args.path ? sb.resolve(args.path) : sb.cwd;
       const max = Math.min(args.max_results || 60, 300);
       let files = [];
       if (fs.existsSync(base) && fs.statSync(base).isFile()) files = [base];
       else walk(base, false, files, 20000);
       const gre = args.glob ? globToRegex(args.glob.replace(/^\.\//, '')) : null;
-      const out = [];
-      for (const f of files) {
-        if (gre && !gre.test(path.relative(base, f).split(path.sep).join('/'))) continue;
-        if (!gre && !/\.(md|txt|json|csv|js|py|html|css|ya?ml|tex|canvas)$/i.test(f)) continue;
-        let txt; try { const st = fs.statSync(f); if (st.size > 2e6) continue; txt = fs.readFileSync(f, 'utf8'); } catch { continue; }
-        const lines = txt.split('\n');
-        for (let i = 0; i < lines.length; i++) {
-          if (re.test(lines[i])) { out.push(sb.rel(f) + ':' + (i + 1) + ': ' + lines[i].slice(0, 300)); if (out.length >= max) break; }
-        }
-        if (out.length >= max) break;
-      }
-      return { text: out.length ? out.join('\n') : 'No matches for /' + args.pattern + '/.' };
+      files = files.filter(f => sb.readable(f) && (gre ? gre.test(path.relative(base, f).split(path.sep).join('/')) : /\.(md|txt|json|csv|js|py|html|css|ya?ml|tex|canvas)$/i.test(f)));
+      // The model writes the regex, so it can be catastrophic (ReDoS). Run it in a worker we can kill.
+      const out = await grepInWorker(String(args.pattern), files, max, GREP_TIMEOUT_MS);
+      if (out === null) return { text: 'That regex took too long (over ' + GREP_TIMEOUT_MS / 1000 + ' s) — use a simpler pattern.' };
+      return { text: out.length ? out.map(o => sb.rel(o.f) + ':' + o.n + ': ' + o.line).join('\n') : 'No matches for /' + args.pattern + '/.' };
     }
     case 'web_search': return { text: await webSearch(String(args.query || ''), args.max_results) };
     case 'web_fetch': return { text: await webFetch(String(args.url || '')) };

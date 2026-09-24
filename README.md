@@ -60,7 +60,7 @@ On macOS you can double-click `Jarvis.command` instead of `npm start`. On Window
 - **Memory.** Your pinned profile plus a `memory.md` that is distilled automatically from your conversations.
 - **One-click protocols:** Study Mode (spoken quiz), Past Paper, Mark My Work, Morning Report, Night Review (spaced repetition), Deep Research, Process Inbox, Link Notes, Rebuild Index, Weekly Plan, Gap Audit, Revision Sheet, Organize Files, Inbox Brief, Draft Reply, Calendar Brief.
 - **HUD:** ⌘K search, a note viewer with clickable wikilinks, a link graph, an exam countdown, a to-do list, themes, and a full English / 繁體中文 UI.
-- **Phone:** same Wi-Fi via ⚙ → PHONE, or from anywhere with voice via [Tailscale](https://tailscale.com).
+- **Phone:** from anywhere with voice via [Tailscale](https://tailscale.com), or on the same Wi-Fi after setting `JARVIS_LAN=1` (off by default, when Jarvis only listens on this computer).
 - **Automations:** `bash .claude/automations/install-crons.sh` (macOS/Linux) schedules the morning report, memory consolidation, the weekly plan, the gap audit and nightly self-improvement.
 
 ## Gmail & Calendar (optional, any model)
@@ -100,11 +100,24 @@ Browser / phone ─┴─▶ .claude/dashboard/server.js ──▶ .claude/agent
 ## Privacy & disclosures
 
 - **Network:** your prompts and the note excerpts they need go **only to the model provider you choose**. With Ollama, nothing leaves your computer. Web search uses DuckDuckGo, or Tavily/Brave if you add a key. Speech uses Microsoft Edge TTS (or ElevenLabs if configured). Gmail and Calendar use Google's APIs with your own OAuth client.
-- **Local server:** Jarvis runs an HTTP server on port 3333. Requests from other devices need the random access key.
+- **Local server:** Jarvis runs an HTTP server on `127.0.0.1:3333`, reachable only from this computer unless you set `JARVIS_LAN=1`. See Security below.
 - **Files:** the plugin writes Jarvis's code into `.claude/` in your vault. It never overwrites your notes, skills or memory, and backs up customised code as `.bak-*`.
 - **Kept local and git-ignored:** keys (`.env`, plugin `data.json`), `memory.md`, `profile.md`, conversation logs, the Google token and sessions.
 - Free-tier API providers may use prompts to improve their models, so check their terms.
 - No telemetry, no accounts, no payments.
+
+## Security
+
+Jarvis reads untrusted text (web pages and emails) and runs a local server, so it is built to assume both will be attacked.
+
+- **Other websites can't drive it.** Every API call needs a 128-bit key sent in a header and compared in constant time. The key is stored in `.claude/.jarvis-key` with owner-only permissions. Requests with a foreign `Origin` or an unknown `Host` are refused, which blocks cross-site requests and DNS rebinding. Repeated wrong keys are rate-limited. The HUD can only be framed by itself and the Obsidian plugin.
+- **Jarvis can't rewrite Jarvis.** The agent cannot write its own code, launchers, cron scripts, `.env` or config. It cannot create runnable files (`.sh`, `.command`, `.bat`, …) anywhere, and it cannot read secrets (`.env`, the OAuth token, the access key). Every path is checked after resolving symlinks.
+- **Unattended jobs are guarded.** Cron jobs run through `run-guarded.sh`, which snapshots Jarvis's code and restores anything the run changed, whichever model or backend ran it. Self-improve can only *propose* code changes, in its nightly report.
+- **No SSRF.** `web_fetch` refuses loopback, private, link-local and metadata addresses, checking every redirect hop and at connection time.
+- **Hard limits:** there is no delete, shell or email-send tool; request bodies are capped; model-written regexes run in a worker with a timeout.
+- **Claude Code backend:** if you set `JARVIS_AGENT=claude`, Claude Code's own permission system replaces the sandbox above. The cron guard still applies.
+
+Found a problem? Please open an issue. `test/security.test.js` has a regression test for every fixed finding.
 
 ## License
 

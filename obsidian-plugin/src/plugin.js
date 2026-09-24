@@ -71,7 +71,7 @@ module.exports = class VaultJarvisPlugin extends Plugin {
   async onload() {
     if (!Platform.isDesktopApp) return;
     this.settings = Object.assign({}, DEFAULTS, await this.loadData());
-    if (!this.settings.key) { this.settings.key = crypto.randomBytes(6).toString('hex'); await this.saveData(this.settings); }
+    if (!/^[0-9a-f]{32,}$/.test(this.settings.key || '')) { this.settings.key = crypto.randomBytes(16).toString('hex'); await this.saveData(this.settings); }   // 128-bit
     this.child = null; this.lastError = '';
     this.registerView(VIEW_TYPE, leaf => new JarvisView(leaf, this));
     this.addRibbonIcon('bot', 'Open Jarvis', () => this.openView());
@@ -181,7 +181,7 @@ module.exports = class VaultJarvisPlugin extends Plugin {
   }
 
   async alive() {
-    try { const r = await requestUrl({ url: this.api('/stats?key=' + this.settings.key), throw: false }); return r.status === 200; }
+    try { const r = await requestUrl({ url: this.api('/stats'), headers: { 'x-key': this.settings.key }, throw: false }); return r.status === 200; }
     catch { return false; }
   }
 
@@ -211,7 +211,7 @@ module.exports = class VaultJarvisPlugin extends Plugin {
   stopServer() { if (this.child) { try { this.child.kill(); } catch {} this.child = null; } }
   async restartServer() {
     this.stopServer();
-    try { await requestUrl({ url: this.api('/shutdown'), method: 'POST', throw: false }); } catch {}
+    try { await requestUrl({ url: this.api('/shutdown'), method: 'POST', headers: { 'x-key': this.settings.key }, throw: false }); } catch {}
     await sleep(500);
     const ok = await this.ensureServer();
     new Notice(ok ? 'Jarvis restarted.' : 'Jarvis failed to start: ' + this.lastError.split('\n')[0]);

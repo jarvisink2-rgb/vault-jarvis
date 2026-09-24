@@ -2,7 +2,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { VAULT, PORT, KEY, SERVER_START } = require('./config');
+const { VAULT, PORT, HOST, KEY, SERVER_START } = require('./config');
 const { mdFiles, exams } = require('./vault');
 const { lanIP, getTsUrl } = require('./net');
 const { isWhisperReady } = require('./voice');
@@ -40,7 +40,7 @@ function stats() {
     wiki: files.filter(f => rel(f).startsWith('wiki' + path.sep)).length,
     output: files.filter(f => rel(f).startsWith('output' + path.sep)).length,
     rawPending: rawPending.length, todos, recent, whisper: isWhisperReady(), exams: exams(),
-    phone: (() => { const ip = lanIP(); return ip ? 'http://' + ip + ':' + PORT + '/?key=' + KEY : null; })(),
+    phone: (() => { const ip = HOST !== '127.0.0.1' && lanIP(); return ip ? 'http://' + ip + ':' + PORT + '/?key=' + KEY : null; })(),   // only when JARVIS_LAN=1
     remote: getTsUrl(),
     convoCount: convoCount(),
     memoryEntries: (() => { try { return (fs.readFileSync(MEM_PATH, 'utf8').match(/^-\s/gm) || []).length; } catch { return 0; } })(),

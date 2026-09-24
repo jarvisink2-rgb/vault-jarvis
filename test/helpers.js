@@ -29,4 +29,14 @@ function run(args, opts) {
     c.on('close', code => resolve({ code, out, err }));
   });
 }
-module.exports = { ROOT, tempVault, llmEnv, run };
+const KEY = '0123456789abcdef0123456789abcdef';
+async function boot(env) {
+  const v = tempVault();
+  const port = 4000 + Math.floor(Math.random() * 2000);
+  const c = spawn(process.execPath, [path.join(v, '.claude', 'dashboard', 'server.js')], { env: { ...env, PORT: String(port), JARVIS_KEY: KEY }, stdio: 'ignore' });
+  const base = 'http://127.0.0.1:' + port;
+  for (let i = 0; i < 40; i++) { try { if ((await fetch(base + '/health')).ok) break; } catch {} await new Promise(r => setTimeout(r, 150)); }
+  const f = (p, o = {}) => fetch(base + p, { ...o, headers: { 'x-key': KEY, ...(o.headers || {}) } });
+  return { v, base, f, port, stop: () => c.kill() };
+}
+module.exports = { ROOT, tempVault, llmEnv, run, boot, KEY };

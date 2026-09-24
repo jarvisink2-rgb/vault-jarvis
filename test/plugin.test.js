@@ -28,7 +28,7 @@ test('Obsidian plugin: installs runtime into an empty vault, runs the server, pr
     for (const f of ['CLAUDE.md', 'TO DO.md', '.claude/dashboard/server.js', '.claude/agent/vault-agent.js', '.claude/skills/quiz-me/SKILL.md', '.claude/memory/profile.md'])
       assert.ok(fs.existsSync(path.join(v, f)), f);
     assert.ok(await p.alive());
-    assert.match(await (await fetch('http://127.0.0.1:' + port + '/ask', { method: 'POST', body: JSON.stringify({ q: 'hi' }) })).text(), /Hello from the model/);
+    assert.match(await (await fetch('http://127.0.0.1:' + port + '/ask', { method: 'POST', headers: { 'x-key': p.settings.key }, body: JSON.stringify({ q: 'hi' }) })).text(), /Hello from the model/);
     assert.strictEqual(JSON.parse(fs.readFileSync(path.join(v, '.claude', 'jarvis.json'), 'utf8')).ownerName, 'Maya');
     fs.appendFileSync(path.join(v, '.claude', 'skills', 'quiz-me', 'SKILL.md'), '\nmine\n');
     fs.appendFileSync(path.join(v, '.claude', 'dashboard', 'lib', 'skills.js'), '\n// tweak\n');
@@ -37,7 +37,7 @@ test('Obsidian plugin: installs runtime into an empty vault, runs the server, pr
     assert.ok(fs.readFileSync(path.join(v, '.claude', 'skills', 'quiz-me', 'SKILL.md'), 'utf8').endsWith('mine\n'));
     assert.ok(fs.readdirSync(path.join(v, '.claude', 'dashboard', 'lib')).some(f => f.startsWith('skills.js.bak-')));
   } finally {
-    p.stopServer(); try { await fetch('http://127.0.0.1:' + port + '/shutdown', { method: 'POST' }); } catch {}
+    p.stopServer(); try { await fetch('http://127.0.0.1:' + port + '/shutdown', { method: 'POST', headers: { 'x-key': p.settings.key } }); } catch {}
     llm.close(); Module._load = origLoad;
   }
 });

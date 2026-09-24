@@ -17,7 +17,8 @@ const API = 'http://127.0.0.1:' + PORT;          // what we probe: localhost may
 const args = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function up() { try { const r = await fetch(API + '/stats', { signal: AbortSignal.timeout(1000) }); return r.ok; } catch { return false; } }
+async function up() { try { const r = await fetch(API + '/health', { signal: AbortSignal.timeout(1000) }); return r.ok; } catch { return false; } }
+function key() { if (process.env.JARVIS_KEY) return process.env.JARVIS_KEY; try { return fs.readFileSync(path.join(__dirname, '.jarvis-key'), 'utf8').trim(); } catch { return ''; } }
 
 function openBrowser(url) {
   const cmd = process.platform === 'darwin' ? ['open', [url]]
@@ -31,7 +32,7 @@ function openBrowser(url) {
   if (Number(process.versions.node.split('.')[0]) < 18) { console.error('Node.js 18+ is required.'); process.exit(1); }
   if (args.includes('--restart') && await up()) {
     console.log('Taking Jarvis offline…');
-    try { await fetch(API + '/shutdown', { method: 'POST' }); } catch {}
+    try { await fetch(API + '/shutdown', { method: 'POST', headers: { 'x-key': key() } }); } catch {}
     for (let i = 0; i < 20 && await up(); i++) await sleep(250);
   }
   if (await up()) console.log('Jarvis is already online.');

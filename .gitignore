@@ -19,3 +19,4 @@ __pycache__/
 .claude/dashboard/lib/*.bak*
 dist/
 selftest-report.txt
+.claude/.jarvis-key
