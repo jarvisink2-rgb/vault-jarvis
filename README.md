@@ -20,7 +20,7 @@ A voice-first personal AI assistant that lives in your Obsidian vault. Talk to i
 **You need:** [Node.js 18+](https://nodejs.org), Google Chrome (for the microphone), and optionally Python 3 for offline speech recognition.
 
 ```bash
-git clone https://github.com/<you>/vault-jarvis.git
+git clone https://github.com/jarvisink2-rgb/vault-jarvis.git
 cd vault-jarvis
 bash setup.sh                 # creates .env, memory files, installs the voice package
 ```
