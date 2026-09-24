@@ -30,7 +30,10 @@ test('dashboard: page, stats, search, notes, ask, skill run, settings, owner nam
     assert.match(await (await fetch(s.base + '/run', { method: 'POST', body: JSON.stringify({ id: 'morning-report' }) })).text(), /Right away/);
     const set = await (await fetch(s.base + '/settings', { method: 'POST', body: JSON.stringify({ ownerName: 'Sam', pronoun: 'they' }) })).json();
     assert.strictEqual(set.ownerName, 'Maya'); // env overrides the file
-    assert.match((await (await fetch(s.base + '/greet')).json()).text, /Maya/);
+    for (let i = 0; i < 8; i++) { // greetings are random: none may use the default name or honorific
+      const g = (await (await fetch(s.base + '/greet')).json()).text;
+      assert.doesNotMatch(g, /\bBoss\b|\bsir\b/i, g);
+    }
   } finally { s.stop(); llm.close(); }
 });
 
