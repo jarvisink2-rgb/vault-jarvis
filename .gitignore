@@ -1,0 +1,16 @@
+# secrets
+.env
+# personal data Jarvis creates at runtime — never commit these
+.claude/memory/memory.md
+.claude/memory/profile.md
+.claude/agent-sessions/
+.claude/dashboard/convo-log.json
+.claude/dashboard/persona-learned.txt
+.claude/dashboard/nudges.json
+.claude/dashboard/folders.json
+.claude/dashboard/*.bak*
+.claude/dashboard/*.pre-improve
+.claude/dashboard/node_modules/
+__pycache__/
+.DS_Store
+.obsidian/workspace*.json

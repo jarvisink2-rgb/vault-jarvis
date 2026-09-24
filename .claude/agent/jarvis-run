@@ -1,0 +1,8 @@
+#!/bin/bash
+# Headless runner used by the automations: same flags as `claude -p`.
+# Uses the bundled model-agnostic agent unless JARVIS_AGENT=claude.
+DIR="$(cd "$(dirname "$0")" && pwd)"
+VAULT="$(cd "$DIR/../.." && pwd)"
+[ -f "$VAULT/.env" ] && set -a && . "$VAULT/.env" && set +a
+if [ "${JARVIS_AGENT:-}" = "claude" ]; then exec claude "$@"; fi
+exec node "$DIR/vault-agent.js" "$@"

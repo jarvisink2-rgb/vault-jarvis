@@ -1,0 +1,1 @@
+{ "name": "jarvis-vault-dashboard", "private": true, "version": "2.0.0", "dependencies": { "msedge-tts": "^1.3.4" } }
