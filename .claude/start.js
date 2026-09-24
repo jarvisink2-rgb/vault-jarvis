@@ -12,11 +12,12 @@ const { spawn } = require('child_process');
 const root = path.resolve(__dirname, '..');
 require('./agent/env.js').loadEnv([path.join(root, '.env')]);
 const PORT = process.env.PORT || 3333;
-const URL = 'http://localhost:' + PORT;
+const URL = 'http://localhost:' + PORT;          // what the browser opens
+const API = 'http://127.0.0.1:' + PORT;          // what we probe: localhost may resolve to IPv6 ::1
 const args = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function up() { try { const r = await fetch(URL + '/stats', { signal: AbortSignal.timeout(1000) }); return r.ok; } catch { return false; } }
+async function up() { try { const r = await fetch(API + '/stats', { signal: AbortSignal.timeout(1000) }); return r.ok; } catch { return false; } }
 
 function openBrowser(url) {
   const cmd = process.platform === 'darwin' ? ['open', [url]]
@@ -29,7 +30,7 @@ function openBrowser(url) {
   if (Number(process.versions.node.split('.')[0]) < 18) { console.error('Node.js 18+ is required.'); process.exit(1); }
   if (args.includes('--restart') && await up()) {
     console.log('Taking Jarvis offline…');
-    try { await fetch(URL + '/shutdown', { method: 'POST' }); } catch {}
+    try { await fetch(API + '/shutdown', { method: 'POST' }); } catch {}
     for (let i = 0; i < 20 && await up(); i++) await sleep(250);
   }
   if (await up()) console.log('Jarvis is already online.');

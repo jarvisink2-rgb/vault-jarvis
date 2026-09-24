@@ -23,7 +23,8 @@ test('Obsidian plugin: installs runtime into an empty vault, runs the server, pr
   const port = 6000 + Math.floor(Math.random() * 2000);
   p._d = { provider: 'custom', baseUrl: llm.url, apiKey: 'test', model: 'mock-1', port, ownerName: 'Maya', pronoun: 'she' };
   try {
-    await p.onload(); await ready(); await new Promise(r => setTimeout(r, 200)); await p.starting;
+    await p.onload(); await ready();
+    assert.ok(await p.ensureServer(), p.lastError);
     for (const f of ['CLAUDE.md', 'TO DO.md', '.claude/dashboard/server.js', '.claude/agent/vault-agent.js', '.claude/skills/quiz-me/SKILL.md', '.claude/memory/profile.md'])
       assert.ok(fs.existsSync(path.join(v, f)), f);
     assert.ok(await p.alive());

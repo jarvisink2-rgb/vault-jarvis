@@ -94,6 +94,8 @@ module.exports = class VaultJarvisPlugin extends Plugin {
     return a.getBasePath();
   }
   url() { return 'http://localhost:' + this.settings.port + '/?key=' + this.settings.key; }
+  // Probes use 127.0.0.1: on Windows/Node 18+ "localhost" can resolve to IPv6 ::1, but the server listens on IPv4.
+  api(p) { return 'http://127.0.0.1:' + this.settings.port + p; }
 
   async openView() {
     let leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
@@ -179,15 +181,15 @@ module.exports = class VaultJarvisPlugin extends Plugin {
   }
 
   async alive() {
-    try { const r = await requestUrl({ url: 'http://localhost:' + this.settings.port + '/stats?key=' + this.settings.key, throw: false }); return r.status === 200; }
+    try { const r = await requestUrl({ url: this.api('/stats?key=' + this.settings.key), throw: false }); return r.status === 200; }
     catch { return false; }
   }
 
-  async ensureServer() {
-    if (await this.alive()) return true;
-    if (this.starting) return this.starting;
+  ensureServer() {
+    if (this.starting) return this.starting;       // lock taken synchronously — no double starts
     this.starting = (async () => {
       try {
+        if (await this.alive()) return true;
         const base = this.vaultPath();
         const server = path.join(base, '.claude', 'dashboard', 'server.js');
         if (!fs.existsSync(server)) await this.installRuntime(false);
@@ -209,7 +211,7 @@ module.exports = class VaultJarvisPlugin extends Plugin {
   stopServer() { if (this.child) { try { this.child.kill(); } catch {} this.child = null; } }
   async restartServer() {
     this.stopServer();
-    try { await requestUrl({ url: 'http://localhost:' + this.settings.port + '/shutdown', method: 'POST', throw: false }); } catch {}
+    try { await requestUrl({ url: this.api('/shutdown'), method: 'POST', throw: false }); } catch {}
     await sleep(500);
     const ok = await this.ensureServer();
     new Notice(ok ? 'Jarvis restarted.' : 'Jarvis failed to start: ' + this.lastError.split('\n')[0]);

@@ -25,7 +25,7 @@ const PRESETS = {
   },
   // 100% local and free. Install https://ollama.com, then e.g. `ollama pull qwen3`.
   ollama: {
-    baseUrl: 'http://localhost:11434/v1',
+    baseUrl: 'http://127.0.0.1:11434/v1', // not "localhost": it can resolve to IPv6 ::1, Ollama listens on IPv4
     keyEnv: [],
     model: null, fastModel: null,
   },
