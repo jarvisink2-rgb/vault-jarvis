@@ -68,12 +68,18 @@ async function tts(text, res, lang, mode) {
 // ---------- Whisper ears (local STT sidecar) ----------
 let whisperChild = null, whisperReady = false;
 function startWhisper() {
-  const probe = spawn(PY, ['-c', 'import faster_whisper'], { stdio: 'ignore' });
+  // Python is optional: a missing interpreter must never take the server down (spawn emits 'error', not an exception).
+  let probe;
+  try { probe = spawn(PY, ['-c', 'import faster_whisper'], { stdio: 'ignore' }); } catch { return; }
+  let noPython = false;
+  probe.on('error', () => { noPython = true; console.log('🎧 Whisper ears unavailable (no Python found) — browser speech recognition will be used.'); });
   probe.on('close', code => {
+    if (noPython) return;
     if (code !== 0) { console.log('🎧 Whisper ears not installed — enable with: pip3 install faster-whisper'); return; }
     whisperChild = spawn(PY, [path.join(DASH, 'whisper_server.py')], { stdio: ['ignore', 'pipe', 'pipe'] });
     whisperChild.stdout.on('data', d => { if (String(d).includes('[whisper] ready')) { whisperReady = true; console.log('🎧 Whisper ears ready'); } });
     whisperChild.stderr.on('data', () => {});
+    whisperChild.on('error', () => { whisperChild = null; whisperReady = false; });
     whisperChild.on('close', () => { whisperChild = null; whisperReady = false; });
   });
 }

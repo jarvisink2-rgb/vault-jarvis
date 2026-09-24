@@ -226,6 +226,7 @@ module.exports = class VaultJarvisPlugin extends Plugin {
     new Notice('Opening Google sign-in in your browser…');
     const c = spawn(node.cmd, [script, 'auth'], { env: this.env(node.electron), stdio: ['ignore', 'pipe', 'pipe'] });
     let out = ''; c.stdout.on('data', d => out += d); c.stderr.on('data', d => out += d);
+    c.on('error', e => new Notice('Could not start Google sign-in: ' + e.message, 8000));
     c.on('close', code => { new Notice(code === 0 ? 'Google connected — Jarvis can now read mail, draft replies and use your calendar.' : 'Google sign-in failed: ' + out.trim().split('\n').pop(), 8000); if (code === 0) this.restartServer(); });
   }
 };

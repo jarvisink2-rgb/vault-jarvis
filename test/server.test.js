@@ -17,7 +17,8 @@ async function boot(env) {
 
 test('dashboard: page, stats, search, notes, ask, skill run, settings, owner name', async () => {
   const llm = await start(body => ({ content: 'Right away.' }));
-  const s = await boot(llmEnv(llm.url, { JARVIS_OWNER_NAME: 'Maya', JARVIS_OWNER_PRONOUN: 'she', JARVIS_CURRICULUM: 'A-Level' }));
+  // JARVIS_PYTHON points nowhere: a computer without Python must still run Jarvis (regression: Windows crash in 1.0.1)
+  const s = await boot(llmEnv(llm.url, { JARVIS_OWNER_NAME: 'Maya', JARVIS_OWNER_PRONOUN: 'she', JARVIS_CURRICULUM: 'A-Level', JARVIS_PYTHON: 'python-that-does-not-exist' }));
   try {
     const page = await (await fetch(s.base + '/')).text();
     assert.match(page, /V\.A\.U\.L\.T\./); assert.match(page, /Speak or type, Maya/); assert.doesNotMatch(page, /\bBoss\b/);

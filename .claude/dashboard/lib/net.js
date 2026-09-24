@@ -31,7 +31,7 @@ function tsProbe(bin) {
 }
 tsProbe('tailscale'); setInterval(() => tsProbe('tailscale'), 120000).unref();
 function notify(msg) { if (process.platform === 'darwin') { try {
-  spawn('osascript', ['-e', 'display notification ' + JSON.stringify(msg) + ' with title "JARVIS"']); } catch {} } }
+  spawn('osascript', ['-e', 'display notification ' + JSON.stringify(msg) + ' with title "JARVIS"']).on('error', () => {}); } catch {} } }
 // acceptEdits + allow calendar MCP tools headlessly. Full autonomy: ['--dangerously-skip-permissions']
 
 module.exports = { authed, lanIP, notify, getTsUrl: () => tsUrl };
