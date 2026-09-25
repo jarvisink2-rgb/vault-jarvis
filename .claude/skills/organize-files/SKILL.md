@@ -102,6 +102,8 @@ Collapse subject folders into `~/Documents/School/`, keeping his folder spelling
 
    Also update `folders.json` if a granted path moved, and list any broken Finder aliases or Dock items so he can fix them himself.
 
+   `CLAUDE.md` and the `.claude/skills|agents|commands` files are **read-only for you by default** (so an injected instruction can't persist). If the write is refused, don't work around it: list every stale reference with its exact replacement under **NEEDS YOUR CALL**, so the owner can apply it (or enable `allowInstructionEdits` in `.claude/jarvis.json`).
+
    Verify by grepping the old path strings afterwards and reporting a clean result. A move that leaves stale references is a half-finished job.
 7. **Report** in under ten lines: counts per destination, the new first layer, skips and why, anything needing his call, where the undo log is.
 

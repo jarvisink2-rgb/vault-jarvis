@@ -44,21 +44,30 @@ const SCHEMAS = [
 //  • write through a symlink into a folder granted READ ONLY.
 // All checks use the real (symlink-resolved) path.
 const posix = p => p.split(path.sep).join('/');
+// Case-insensitive on purpose: macOS and Windows disks usually are, so ".CLAUDE/Agent" IS ".claude/agent" there.
 const WRITE_PROTECTED = [
   /^\.env($|\.)/i,                                  // secrets
-  /^\.claude\/agent(\/|$)/, /^\.claude\/automations(\/|$)/, /^\.claude\/start\.js$/,
-  /^\.claude\/dashboard\/(?!(persona-learned\.txt|nudges\.json)$)/,   // code; the two tuning files stay writable
-  /^\.claude\/(jarvis\.json|\.jarvis-key)$/, /^\.claude\/agent-sessions(\/|$)/,
-  /^\.github(\/|$)/, /^(package\.json|obsidian-plugin\/|test\/)/,
+  /^\.claude\/agent(\/|$)/i, /^\.claude\/automations(\/|$)/i, /^\.claude\/start\.js$/i,
+  /^\.claude\/dashboard\/(?!(persona-learned\.txt|nudges\.json)$)/i,   // code; the two tuning files stay writable
+  /^\.claude\/(jarvis\.json|\.jarvis-key)$/i, /^\.claude\/agent-sessions(\/|$)/i,
+  /^\.github(\/|$)/i, /^(package\.json|obsidian-plugin\/|test\/)/i,
 ];
-const ANYWHERE_PROTECTED = [/(^|\/)\.git(\/|$)/, /(^|\/)\.obsidian(\/|$)/,
+// Jarvis's own instructions: a prompt injection that could edit these would persist across sessions.
+// Read-only unless the owner opts in (jarvis.json "allowInstructionEdits": true or JARVIS_ALLOW_INSTRUCTION_EDITS=1).
+const INSTRUCTIONS = [/^(CLAUDE|AGENTS|JARVIS)\.md$/i, /^\.claude\/(skills|agents|commands)(\/|$)/i];
+const ANYWHERE_PROTECTED = [/(^|\/)\.git(\/|$)/i, /(^|\/)\.obsidian(\/|$)/i,
   /\.(command|sh|bash|zsh|bat|cmd|ps1|psm1|vbs|exe|app|scpt|applescript|plist|desktop|service)$/i];   // nothing runnable, anywhere
-const READ_PROTECTED = [/^\.env($|\.)/i, /(^|\/)google-token\.json$/, /(^|\/)\.jarvis-key$/, /^\.claude\/agent-sessions(\/|$)/];
+const READ_PROTECTED = [/^\.env($|\.)/i, /(^|\/)google-token\.json$/i, /(^|\/)\.jarvis-key$/i, /^\.claude\/agent-sessions(\/|$)/i];
+function instructionEditsAllowed(cwd) {
+  if (process.env.JARVIS_ALLOW_INSTRUCTION_EDITS === '1') return true;
+  try { return JSON.parse(fs.readFileSync(path.join(cwd, '.claude', 'jarvis.json'), 'utf8')).allowInstructionEdits === true; } catch { return false; }
+}
 
 function realish(p) {               // realpath of p, or of its deepest existing ancestor + the rest
   let cur = p; const rest = [];
   for (;;) {
-    try { return path.join(fs.realpathSync(cur), ...rest.reverse()); }
+    // .native returns the on-disk capitalisation, so case-insensitive disks can't dodge the checks
+    try { return path.join(fs.realpathSync.native(cur), ...rest.reverse()); }
     catch { const parent = path.dirname(cur); if (parent === cur) return p; rest.push(path.basename(cur)); cur = parent; }
   }
 }
@@ -100,6 +109,8 @@ class Sandbox {
     for (const r of [rel, lex]) {
       if (r === null || r.startsWith('..')) continue;
       if (WRITE_PROTECTED.some(re => re.test(r))) throw new Error('Protected: Jarvis cannot modify its own code, launchers, schedules or secrets (' + r + '). Describe the change for the owner instead.');
+      if (INSTRUCTIONS.some(re => re.test(r)) && !instructionEditsAllowed(this.cwd))
+        throw new Error('Protected: CLAUDE.md, skills, agents and commands are read-only for Jarvis (' + r + '). Put the proposed change in a note for the owner (they can allow edits with "allowInstructionEdits" in .claude/jarvis.json).');
     }
     if (ANYWHERE_PROTECTED.some(re => re.test(posix(real)) || re.test(posix(abs)))) throw new Error('Protected: no writing inside .git/.obsidian or creating runnable files (' + p + ').');
     return abs;

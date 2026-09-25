@@ -11,8 +11,11 @@ const os = require('os');
 const vi = process.argv.indexOf('--vault');
 const vault = vi > 0 ? path.resolve(process.argv[vi + 1]) : path.resolve(__dirname, '..', '..');
 const SNAP = path.join(os.tmpdir(), 'jarvis-guard-' + crypto.createHash('sha1').update(vault).digest('hex').slice(0, 10));
-const GUARDED = ['.claude/agent', '.claude/dashboard', '.claude/automations', '.claude/start.js', '.env', 'Jarvis.command', 'Jarvis Restart.command', 'Jarvis.bat', 'Jarvis Restart.bat', 'jarvis.sh'];
-const ALLOWED = /^\.claude\/dashboard\/(persona-learned\.txt|nudges\.json|convo-log\.json|folders\.json)$|__pycache__|\.pyc$/;
+const GUARDED = ['.claude/agent', '.claude/dashboard', '.claude/automations', '.claude/start.js', '.claude/jarvis.json', '.env',
+  'CLAUDE.md', 'AGENTS.md', 'JARVIS.md', '.claude/skills', '.claude/agents', '.claude/commands',        // his instructions
+  'Jarvis.command', 'Jarvis Restart.command', 'Jarvis.bat', 'Jarvis Restart.bat', 'jarvis.sh'];
+// folders.json is NOT exempt: an unattended run (e.g. Claude Code backend, no sandbox) must not grant itself new folders.
+const ALLOWED = /^\.claude\/dashboard\/(persona-learned\.txt|nudges\.json|convo-log\.json)$|__pycache__|\.pyc$/;
 
 function files() {
   const out = [];

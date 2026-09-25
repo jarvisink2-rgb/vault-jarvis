@@ -17,7 +17,7 @@ const VIEW_TYPE = 'vault-jarvis-hud';
 
 const DEFAULTS = {
   provider: 'gemini', apiKey: '', model: '', fastModel: '', baseUrl: '',
-  ownerName: 'Boss', pronoun: 'they', curriculum: 'IB',
+  ownerName: 'Boss', pronoun: 'they', curriculum: 'IB', allowInstructionEdits: false,
   port: 3333, autoStart: true, nodePath: '',
   googleClientId: '', googleClientSecret: '', tavilyKey: '',
   installed: {}, // relPath -> sha1 of the version the plugin last wrote (so user edits are never clobbered silently)
@@ -143,7 +143,7 @@ module.exports = class VaultJarvisPlugin extends Plugin {
     let cur = {}; try { cur = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
     const s = this.settings;
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, JSON.stringify({ ...cur, ownerName: s.ownerName, pronoun: s.pronoun, curriculum: s.curriculum }, null, 2));
+    fs.writeFileSync(p, JSON.stringify({ ...cur, ownerName: s.ownerName, pronoun: s.pronoun, curriculum: s.curriculum, allowInstructionEdits: !!s.allowInstructionEdits }, null, 2));
   }
 
   // ── Server process ────────────────────────────────────────────────────────
@@ -270,6 +270,8 @@ class JarvisSettingTab extends PluginSettingTab {
     el.createEl('h3', { text: 'Advanced' });
     new Setting(el).setName('Web search key (Tavily, optional)').setDesc('More reliable than the keyless default. Free tier at tavily.com.')
       .addText(t => { t.inputEl.type = 'password'; t.setValue(s.tavilyKey).onChange(async v => { s.tavilyKey = v.trim(); await save(false); }); });
+    new Setting(el).setName('Let Jarvis edit his instructions').setDesc('Allow the agent to change CLAUDE.md and the skill/agent/command files. Off by default so a malicious web page or email can\'t leave him permanent instructions.')
+      .addToggle(t => t.setValue(!!s.allowInstructionEdits).onChange(async v => { s.allowInstructionEdits = v; await save(false); }));
     new Setting(el).setName('Port').addText(t => t.setValue(String(s.port)).onChange(async v => { const n = parseInt(v, 10); if (n > 1023 && n < 65536) { s.port = n; await save(false); } }));
     new Setting(el).setName('Start with Obsidian').addToggle(t => t.setValue(s.autoStart).onChange(async v => { s.autoStart = v; await save(false); }));
     new Setting(el).setName('Node.js path (optional)').setDesc('Leave empty to auto-detect; falls back to Obsidian\'s built-in runtime.')

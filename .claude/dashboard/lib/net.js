@@ -49,11 +49,14 @@ function gate(req, kind) {
     let oh = ''; try { oh = new URL(origin).host; } catch {}
     if (!allowedHosts().has(hostOf(oh))) return { status: 403, msg: 'cross-origin request refused' };
   } else if (origin === 'null') return { status: 403, msg: 'opaque origin refused' };
-  if (limited(ip)) return { status: 429, msg: 'too many bad keys — wait 10 minutes' };
   const sent = kind === 'page' ? (req.headers['x-key'] || queryKey(req) || cookieKey(req)) : req.headers['x-key'];
-  if (keyOk(sent)) return null;
-  if (kind === 'page' && LOOPBACK.has(ip) && !req.headers['x-forwarded-for'] && !req.headers['tailscale-user-login']) return null;
-  noteFail(ip);
+  if (keyOk(sent)) return null;                     // the right key always works — nobody can lock the owner out
+  const proxied = !!(req.headers['x-forwarded-for'] || req.headers['tailscale-user-login']);
+  const local = LOOPBACK.has(ip) && !proxied;
+  if (kind === 'page' && local) return null;
+  // Only a WRONG key counts as a guess (a keyless <img> ping from some web page is not one), and this
+  // machine is never rate-limited: every local page shares 127.0.0.1, so a hostile tab could lock you out.
+  if (sent && !local) { noteFail(ip); if (limited(ip)) return { status: 429, msg: 'too many bad keys — wait 10 minutes' }; }
   return { status: 401, msg: 'unauthorized' };
 }
 function authed(req, kind) { return gate(req, kind || 'api') === null; }
